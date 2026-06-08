@@ -1,0 +1,72 @@
+"""
+모든 상수 정의. 다른 모듈을 import하지 않는다.
+"""
+
+ANTHROPIC_VERSION  = "bedrock-2023-05-31"
+DEFAULT_AWS_REGION = "ap-northeast-2"
+DEFAULT_MODEL_ID   = "anthropic.claude-3-5-sonnet-20240620-v1:0"
+
+# ── 구조적 역할 분류 ─────────────────────────────────────────────────────
+STRUCTURAL_FUNCTIONS: dict[str, list[str]] = {
+    "base":        ["용제", "벌킹제"],
+    "thickener":   ["점도조절제", "유화안정제"],
+    "preservative":["살균보존제", "항균제", "항미생물제"],
+    "ph_adj":      ["pH조절제", "pH 완충제"],
+    "chelator":    ["금속이온봉쇄제"],
+    "surfactant":  ["계면활성제", "유화제"],
+    "fragrance":   ["방향제", "향료", "착향제"],
+}
+_FUNC_TO_ROLE: dict[str, str] = {
+    fn: role for role, fns in STRUCTURAL_FUNCTIONS.items() for fn in fns
+}
+BASE_ROLES: set[str] = {"base", "thickener", "preservative", "ph_adj", "chelator"}
+
+_KNOWN_BASE: set[str] = {
+    "정제수", "글리세린", "부틸렌글라이콜", "프로판다이올", "1,2-헥산다이올",
+    "다이프로필렌글라이콜", "에틸헥실글리세린", "펜틸렌글라이콜", "메틸프로판다이올",
+    "잔탄검", "트로메타민", "카보머", "소듐파이테이트", "다이소듐이디티에이",
+    "향료", "토코페롤", "암모늄아크릴로일다이메틸타우레이트/브이피코폴리머",
+    "아크릴레이트/C10-30알킬아크릴레이트크로스폴리머",
+}
+
+# ── 관용명/음차 힌트 사전 ────────────────────────────────────────────────
+ALIAS_HINTS: dict[str, list[str]] = {
+    "어성초추출물":  ["약모밀추출물"],
+    "피디알엔":      ["소듐디엔에이"],
+    "PDRN":          ["소듐디엔에이"],
+    "비타민c":       ["3-O-에틸아스코빅애씨드", "아스코빅애씨드"],
+    "글루타치온":    ["글루타티온"],
+    "PHA":           ["글루코노락톤"],
+    "AHA":           ["글라이콜릭애씨드", "락틱애씨드", "시트릭애씨드"],
+    "BHA":           ["살리실릭애씨드"],
+    "LHA":           ["카프릴로일살리실릭애씨드"],
+    "시카":          ["병풀추출물", "병풀잎추출물"],
+}
+
+# ── 제형·사용감 / 마케팅 키워드 (정규식 추출용) ──────────────────────────
+FORMULATION_HINT_KEYWORDS: list[str] = [
+    "끈적이지 않는", "끈적임 없는", "산뜻한", "산뜻하게", "가벼운", "가볍게",
+    "오일프리", "촉촉한", "촉촉하게", "가용화", "워터리",
+    "에센스", "세럼", "앰플", "토너", "로션", "크림", "젤", "겔", "폼",
+    "투명한", "유화", "에멀전",
+]
+
+MARKETING_HINT_KEYWORDS: list[str] = [
+    "미백", "브라이트닝", "안티에이징", "항노화", "진정", "탄력",
+    "재생", "피부장벽", "트러블", "민감성", "광채", "주름", "모공",
+    "각질", "피부결", "수분", "보습", "영양",
+]
+
+# ── Bedrock 요금표 (USD / 1M 토큰) ──────────────────────────────────────
+BEDROCK_PRICING: dict[str, dict[str, float]] = {
+    "anthropic.claude-3-5-sonnet-20240620-v1:0":    {"input": 3.00, "output": 15.00},
+    "anthropic.claude-3-5-haiku-20241022-v1:0":     {"input": 1.00, "output":  5.00},
+    "anthropic.claude-3-sonnet-20240229-v1:0":      {"input": 3.00, "output": 15.00},
+    "anthropic.claude-3-haiku-20240307-v1:0":       {"input": 0.25, "output":  1.25},
+    "anthropic.claude-3-opus-20240229-v1:0":        {"input": 15.00,"output": 75.00},
+    "anthropic.claude-sonnet-4-5-20250929-v1:0":    {"input": 3.00, "output": 15.00},
+    "anthropic.claude-haiku-4-5-20251001-v1:0":     {"input": 1.00, "output":  5.00},
+    "anthropic.claude-opus-4-5-20251101-v1:0":      {"input": 5.00, "output": 25.00},
+    "us.anthropic.claude-sonnet-4-5-20250929-v1:0": {"input": 3.00, "output": 15.00},
+    "us.anthropic.claude-haiku-4-5-20251001-v1:0":  {"input": 1.00, "output":  5.00},
+}

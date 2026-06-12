@@ -117,7 +117,8 @@ def run_pipeline(
 
     # 6. 컨텍스트 구성 (Python only)
     ctx = build_context(
-        stats, keyword_db, formula_dict, query_info, ingredient_map
+        stats, keyword_db, formula_dict, query_info, ingredient_map,
+        target_product=target_product,
     )
     ctx["total_formulas"]          = stats["total_formulas"]
     ctx["user_constraints"]        = user_constraints

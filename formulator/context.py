@@ -75,8 +75,9 @@ def build_context(
     formula_dict: dict,
     query_info: dict,
     ingredient_map: dict[str, list[str] | None],
+    target_product: dict | None = None,
     top_base: int = 15,
-    top_active: int = 15,
+    top_active: int = 20,
 ) -> dict:
     """
     LLM 없이 Python만으로 컨텍스트를 구성한다.
@@ -117,8 +118,27 @@ def build_context(
         n=3,
     )
 
-    # base / active 성분 분리
-    priority = user_ing_names
+    # ── 맥락 기반 허용 성분 목록 구성 ───────────────────────────────────
+    # 우선순위: 질의 성분 > 타겟 처방 성분 > 유사 처방 성분 > base 고빈도 > active 고빈도
+    allowed: set[str] = set()
+
+    # 1) 질의 성분 (사용자 지정 — 반드시 포함)
+    allowed.update(user_ing_names)
+
+    # 2) 타겟 처방 성분 — known_set(ist) 기준 exact match만 포함 (타사 성분명 불일치 필터링)
+    if target_product:
+        for ing in target_product.get("ingredients", []):
+            name = ing.get("name", "")
+            if name in ist:
+                allowed.add(name)
+
+    # 3) 유사 처방 출현 성분
+    for f in similar.get("group_a", []) + similar.get("group_b", []):
+        for name in f.get("ingredients", []):
+            if name in ist:
+                allowed.add(name)
+
+    # base / active 성분 분리 (빈도 내림차순)
     base_ings:   list[dict] = []
     active_ings: list[dict] = []
 
@@ -127,22 +147,22 @@ def build_context(
         if s["structural_role"] in BASE_ROLES or name in _KNOWN_BASE:
             if len(base_ings) < top_base:
                 base_ings.append(entry)
+                allowed.add(name)   # 4) base 고빈도 top_base
         else:
-            if name in priority:
+            if name in user_ing_names:
                 active_ings.insert(0, entry)
             elif len(active_ings) < top_active:
                 active_ings.append(entry)
+                allowed.add(name)   # 5) active 고빈도 top_active
 
-    if len(active_ings) < top_active:
-        exist = {a["name"] for a in active_ings}
-        extras = [
-            {"name": n, **s}
-            for n, s in sorted(ist.items(), key=lambda x: -x[1]["frequency"])
-            if s["structural_role"] not in BASE_ROLES
-            and n not in _KNOWN_BASE
-            and n not in exist
-        ]
-        active_ings += extras[: top_active - len(active_ings)]
+    # allowed에 포함된 active 성분 중 active_ings에 없는 것 추가 (타겟·유사처방 출처)
+    exist_active = {a["name"] for a in active_ings}
+    for name in allowed:
+        if name in ist and name not in exist_active:
+            s = ist[name]
+            if s["structural_role"] not in BASE_ROLES and name not in _KNOWN_BASE:
+                active_ings.append({"name": name, **s})
+                exist_active.add(name)
 
     return {
         "query_info":          query_info,
@@ -151,6 +171,6 @@ def build_context(
         "matched_keywords":    matched_keywords,
         "similar_formulas":    similar,
         "base_ings":           base_ings,
-        "active_ings":         active_ings[:top_active],
-        "allowed_ingredients": sorted(ist.keys()),
+        "active_ings":         sorted(active_ings, key=lambda x: (-x["frequency"], x["name"])),
+        "allowed_ingredients": sorted(allowed),
     }

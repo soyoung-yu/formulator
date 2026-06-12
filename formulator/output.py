@@ -22,6 +22,7 @@ from formulator.utils import (
 )
 
 
+# 모델 ID와 토큰 수로 USD·KRW 호출 비용을 계산해 반환
 def calc_cost(model_id: str, input_tokens: int, output_tokens: int) -> dict:
     KRW_PER_USD = 1380
     pricing = BEDROCK_PRICING.get(model_id)
@@ -46,6 +47,7 @@ def calc_cost(model_id: str, input_tokens: int, output_tokens: int) -> dict:
     }
 
 
+# 비용 dict를 받아 토큰 수·USD·KRW 비용 요약을 콘솔에 출력
 def print_cost_summary(cost: dict) -> None:
     lines = [
         "💰 비용 요약",
@@ -60,6 +62,7 @@ def print_cost_summary(cost: dict) -> None:
     console.print("\n".join(lines))
 
 
+# 생성된 처방 3안을 성분 테이블 형식으로 콘솔에 출력 (rich 사용 가능 시 컬러 테이블)
 def print_results(formula_data: dict, query: str) -> None:
     console.rule(f"처방 생성 결과 — {query}")
     for formula in formula_data.get("formulas", []):
@@ -102,6 +105,7 @@ def print_results(formula_data: dict, query: str) -> None:
         print(f"\n{'─'*65}\n[설계 근거]\n{dr}")
 
 
+# 처방 CSV·Excel·통계 JSON을 output_dir에 저장 (비용·프롬프트 시트 포함)
 def save_results(
     formula_data: dict,
     stats: dict,

@@ -14,6 +14,7 @@ from formulator.query import extract_amount_constraints, extract_query_info, map
 from formulator.utils import console
 
 
+# 데이터 로드 → 질의 분석 → 컨텍스트 구성 → LLM 호출 → 후처리 → 저장까지 전체 파이프라인 실행
 def run_pipeline(
     data_csv:    str,
     product_csv: str,

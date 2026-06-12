@@ -11,6 +11,7 @@ from formulator.config import DEFAULT_AWS_REGION, DEFAULT_MODEL_ID
 from formulator.pipeline import run_pipeline
 
 
+# CLI 인수를 정의하고 파싱해 Namespace 객체로 반환
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="화장품 처방 자동 생성 PoC v1.0 (AWS Bedrock)"
@@ -31,6 +32,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+# CLI 진입점: 인수를 파싱해 run_pipeline을 호출
 def main() -> None:
     args = parse_args()
     run_pipeline(

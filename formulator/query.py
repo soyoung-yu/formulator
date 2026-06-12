@@ -38,6 +38,7 @@ def extract_query_info(
     constraints: dict[str, float | None] = {}
     seen: set[str] = set()
 
+    # 중복 없이 성분명을 ingredients 리스트와 constraints dict에 추가
     def _add(name: str) -> None:
         key = _norm_name(name)
         if key in seen or len(key) < 2:

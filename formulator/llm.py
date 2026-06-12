@@ -18,6 +18,7 @@ except ImportError:
     boto3 = None  # type: ignore[assignment]
 
 
+# 모델 ID와 토큰 수로 USD·KRW 호출 비용을 계산해 반환
 def calc_cost(model_id: str, input_tokens: int, output_tokens: int) -> dict:
     KRW_PER_USD = 1380
     pricing = BEDROCK_PRICING.get(model_id)
@@ -42,6 +43,7 @@ def calc_cost(model_id: str, input_tokens: int, output_tokens: int) -> dict:
     }
 
 
+# AWS 프로파일과 리전으로 Bedrock Runtime boto3 클라이언트를 생성해 반환
 def _create_bedrock_client(aws_profile: str | None, aws_region: str) -> Any:
     if boto3 is None:
         raise RuntimeError("boto3 미설치 — `pip install boto3` 필요")

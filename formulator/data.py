@@ -14,6 +14,7 @@ from formulator.config import BASE_ROLES, _FUNC_TO_ROLE, _KNOWN_BASE
 from formulator.utils import _safe_literal_list, console
 
 
+# 처방 CSV를 읽어 DataFrame과 bulk_code 키의 formula_dict를 반환
 def load_formula_data(csv_path: str) -> tuple[pd.DataFrame, dict]:
     df = pd.read_csv(csv_path, engine="python")
     required = {"bulk_code", "bulk_name", "ingredient_name", "ingredient_function", "content"}
@@ -52,6 +53,7 @@ def load_formula_data(csv_path: str) -> tuple[pd.DataFrame, dict]:
     return df, formula_dict
 
 
+# formula_dict 전체를 순회해 성분별 빈도·함량 통계(min/max/median 등)를 계산
 def build_stats(formula_dict: dict) -> dict:
     idata: dict[str, list[float]] = defaultdict(list)
     iroles: dict[str, str] = {}
@@ -82,6 +84,7 @@ def build_stats(formula_dict: dict) -> dict:
     return {"ingredient_stats": stats, "total_formulas": N}
 
 
+# 마케팅 키워드 CSV를 로드해 키워드별 연관 성분·처방 코드를 인덱싱한 keyword_db 반환
 def load_product_data(product_csv: str, formula_dict: dict) -> dict:
     prod = pd.read_csv(product_csv, engine="python")
     overlap = set(prod["bulk_code"]) & set(formula_dict.keys())

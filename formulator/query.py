@@ -40,9 +40,10 @@ def extract_query_info(
             if len(name) >= 2 and name in query:
                 ingredient_map[name] = [name]
 
-    # 2) ALIAS_HINTS 키 매칭 → values(DB 성분명)로 바로 확장
+    # 2) ALIAS_HINTS 키 매칭 → values(DB 성분명)로 바로 확장 (공백·대소문자 무시)
+    query_norm = _norm_name(query)
     for alias, db_names in ALIAS_HINTS.items():
-        if alias.lower() in query.lower():
+        if _norm_name(alias) in query_norm:
             ingredient_map[alias] = db_names
 
     kw_source       = marketing_keywords if marketing_keywords is not None else set(MARKETING_HINT_KEYWORDS)

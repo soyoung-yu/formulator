@@ -1,152 +1,69 @@
 # 변경 이력
 
-현재 문서는 새로 작성 중인 `formulator_poc_v0.9.py` 기준만 기록한다.
+---
+
+## [v1.0] 2026-06-02
+
+### 전체 재설계 — 단일 파일 → 패키지 구조
+
+v0.9까지의 단일 파일(`formulator_poc_vX.X.py`) 구조를 `formulator/` 패키지로 전면 재설계.
+LLM 호출 횟수를 최대 5회 → 1회로 줄이고, 클래스 기반 파이프라인을 함수 기반으로 단순화.
+
+### 패키지 구조
+
+```
+formulator/
+├── config.py       상수 전용 모듈
+├── data.py         CSV 로드 + 통계 계산
+├── query.py        질의 분석 + 성분명 매핑
+├── context.py      유사 처방 탐색 + 컨텍스트 조립
+├── llm.py          Bedrock 클라이언트 + LLM 호출
+├── prompt.py       SYSTEM_PROMPT + build_user_prompt()
+├── postprocess.py  LLM 출력 검증 + 합계 보정
+├── output.py       콘솔 출력 + 파일 저장 + 비용 계산
+├── pipeline.py     run_pipeline() 오케스트레이터
+└── main.py         CLI 진입점
+```
+
+### 파이프라인 변경
+
+| 구분 | v0.9 | v1.0 |
+|------|------|------|
+| LLM 호출 횟수 | 최대 5회 | 1회 (함량 추출 시 추가 1회) |
+| 파이프라인 구조 | 클래스 기반 14단계 | 함수 기반 9단계 |
+| 성분명 매핑 | 임베딩 모델 + LLM cascade | ALIAS_HINTS + DB exact match + LLM 보조 |
+| 처방 출력 | 최종 Backbone 1안 | 처방 3안 (A/B/C) |
+
+### 추가
+
+- `extract_query_info()` — LLM 없이 DB set + ALIAS_HINTS 기반 질의 분석
+- `extract_amount_constraints()` — 숫자% 표현 있을 때만 LLM 호출해 함량 추출
+- `map_ingredients()` — ALIAS_HINTS 키 → DB 성분명 확장
+- `build_context()` — 유사 처방 그룹A(키워드 매칭)/그룹B(성분 매칭) 분리
+- `call_llm()` — JSON 파싱 실패 시 최대 2회 재시도
+- `validate_and_fix()` — 화이트리스트 exact match + 정제수 합계 보정
+- Excel 저장: 처방 시트, 성분 통계, 키워드-성분 매핑, 설계 근거, 비용 내역, 프롬프트 시트 포함
+
+### 제거
+
+- `classify_formulation_type()` — LLM 처방 생성 프롬프트로 통합
+- `select_structural_ingredients()` — LLM 처방 생성 프롬프트로 통합
+- `review_active_properties()` — LLM 처방 생성 프롬프트로 통합
+- `_apply_user_feel_conflicts()` — LLM 처방 생성 프롬프트로 통합
+- `_fetch_replacements_for_flagged()` — LLM 처방 생성 프롬프트로 통합
+- `FEEL_CONFLICT_MAP`, `FORMULATION_STRUCTURAL_MAP` 하드코딩 룰
+- `sentence-transformers` / `faiss-cpu` 임베딩 의존성
+- `input()` 기반 인터랙티브 흐름 (제형 타입 확인, 타겟 제품 선택)
 
 ---
 
-## [v0.9 — 재작성 시작] 2026-06-02
+## [v0.9] 2026-06-02 (legacy/)
 
-### 추가
-- `formulator_poc_v0.9.py`를 v0.8 복사본이 아닌 새 구조로 작성 시작
-- 데이터 입력 계층 추가
-  - `FormulaDataLoader`
-  - `ProductKeywordLoader`
-  - `ExternalProductLoader`
-  - `EmbeddingModelLoader`
-  - `BedrockClient`
-- 사용자 질의 추출 계층 추가
-  - `QueryContextExtractor`
-  - `QueryContext`
-  - `IngredientConstraint`
-- 제형 타입 및 목적 판단 계층 추가
-  - `DispersionSystemExtractor`
-  - `DispersionJudgement`
-  - `ProductFormExtractor`
-  - `ProductFormJudgement`
-  - `FormulationDetailExtractor`
-  - `FormulationDetailJudgement`
-  - `FormulationPurpose`
-- 구조 골격 설계 계층 추가
-  - `StructureSkeletonDesigner`
-  - `StructureSkeleton`
-- 현재 추출 슬롯
-  - 성분: 성분명, 용해성, 안정 pH 범위
-  - 제형/사용감
-  - 마케팅 포인트
-  - 타겟 제품
-  - 사용자 지정 함량
-- 현재 제형 목적 출력 항목
-  - 분산계 판단
-  - 제형 판단
-  - 세부 제형 판단
-  - 확정 제품 형상
-  - 목표 제형 타입
-  - 목표 점도
-  - 목표 pH 범위
-- 제형 타입 판단 기준 보강
-  - 분산계 판단을 제형 판단보다 먼저 수행
-  - 분산계 판단에서 Python 의미 보정 제거
-  - LLM의 허용 선택지 판단은 유지하고, 물성상 확인이 필요한 경우 warning만 출력
-  - 제형 판단에도 warning 기반 consistency 검증 추가
-  - 제품 형상 판단은 유지하고, 질의 표현/분산계와 어긋나 보이는 경우 warning만 출력
-  - 세부 제형 판단에도 warning 기반 consistency 검증 추가
-  - 점도/pH 판단은 유지하고, 질의 표현/제품 형상/액티브 안정 pH와 어긋나 보이는 경우 warning만 출력
-  - `제형 타입 및 목적` 단계는 확정 분산계를 그대로 사용
-  - `[1. 제형 타입 및 목적]`은 중간 판단 결과를 조립한 최종 요약본으로만 생성
-- 현재 구조 골격 출력 항목
-  - 필수 역할군
-  - 선택 역할군
-  - 역할군별 DB 후보 성분
-- 액티브 적합성 검토 단계 추가
-  - `ActiveSuitabilityReviewer`
-  - `ActiveSuitabilityReview`
-  - 질의에서 추출한 액티브 성분명, 용해성, 안정 pH, 지정 함량을 입력으로 사용
-  - 제형 타입 및 목적, 구조 골격 설계 결과를 함께 검토
-  - 용해성 적합성, pH 적합성, 제형 영향, Backbone 수정 필요 여부 출력
-  - Backbone 수정 필요 시 `issues`, `required_backbone_changes` 생성
-- 조건부 Backbone 수정 계획 단계 추가
-  - `BackboneRevisionPlanner`
-  - `BackboneRevision`
-  - 액티브 검토 결과에서 수정 필요가 감지된 경우에만 실행
-  - 설계 제약조건, 추가 역할군, 수정 근거 출력
-  - 원본 제형 목적과 구조 골격은 자동 변경하지 않고 연구원 검토용 조건만 생성
-- Backbone 수정 계획 일반화
-  - `BackboneAction` 구조체 추가
-  - 액티브 적합성 검토 단계가 `issue_codes`와 구조화된 `backbone_actions`를 직접 생성
-  - Backbone 수정 계획 단계의 문자열 키워드 매칭 기반 role 추론 제거
-  - Backbone 수정 계획 단계는 `action_type`, `role`, `target_value`, `reason_code`를 설계 제약조건으로 변환
-  - 추천 후보와 role 우선순위 확정은 Backbone 수정 계획 단계에서 제거하고 이후 `최종 Backbone 확정` 단계로 이동
-  - `required_backbone_changes`는 콘솔 표시용 문구로 유지
-- 액티브 적합성 검토와 Backbone 수정에 LLM 검토 결합
-  - 액티브 적합성 검토 단계는 rule baseline을 만든 뒤 Bedrock Claude가 액티브 적합성, 이슈 코드, backbone action을 보정
-  - Backbone 수정 계획 단계는 rule baseline 설계 제약조건을 만든 뒤 Bedrock Claude가 조건 문장을 정리
-  - LLM 실패 시 baseline으로 fallback
-  - LLM 응답은 Python에서 허용된 `issue_codes`, `action_type`, `role`, `target_value`만 통과
-  - `change_role_priority` 액션 제거, `add_design_constraint` 액션 추가
-  - 산성 점증 안정성처럼 후보/우선순위가 아닌 조건 정의가 필요한 항목은 설계 제약조건으로 전달
-  - LLM 보정용 리스크 코드에 `TRANSPARENCY_RISK`, `PRECIPITATION_RISK`, `SENSORY_RISK`, `PHOTO_STABILITY_RISK` 추가
-  - Backbone 수정 계획 설계 조건 문구에서 pH 변경은 "조정 필요", 제형 타입 변경은 "Backbone 조건 검토"로 정리
-  - 제형 영향과 농도 영향 검토 포인트를 문자열 목록에서 구조화된 항목으로 변경
-  - 안정 pH 파싱 불가 시 `PH_UNKNOWN`에 대한 설계 조건 action 추가
-  - `[4. Backbone 수정]` 출력/프롬프트 명칭을 `[4. Backbone 수정 계획]`으로 변경했으며, 이후 액티브 적합성 단계와 표시 통합
-  - `review_system`, `note`, `rationale`, `source_actions`의 의미를 문서화
-  - 후보 원료명, 배합비, 사용자 지정 함량 변경 제안은 프롬프트와 파서에서 차단
-  - 성분명 하드코딩 목록(`OXIDATION_SENSITIVE_HINTS`) 기반 산화 민감성 판단 제거
-  - 산화 안정성 우려는 LLM이 `OXIDATION_RISK`로 판단한 경우에만 반영
-- 액티브 적합성 baseline 룰 보수화
-  - 용해성 옵션에 `난용성`, `불용성` 추가
-  - O/W 유화, W/O 유화, 분산 제형에서 전체 용해성을 일괄 `적합` 처리하던 룰 제거
-  - 가용화 제형의 수용성 액티브는 `적합`이지만 가용화 시스템 필요성 재검토 문구 추가
-  - pH 판단을 완전 포함/일부 겹침/불일치로 분리하고 일부 겹침은 `조건부 적합` 처리
-  - 고정 `amount > 10%` 기준으로 `rheology_modifier`, `stabilizer`를 자동 추가하던 룰 제거
-  - 액티브 농도 영향 검토 필드 추가: 검토 포인트
-  - 일반 사용 범위는 현재 단계에서 항상 `불명`이므로 출력 필드에서 제거
-  - 함량 적합성도 현재 단계에서 항상 `판단 보류`이므로 출력 필드에서 제거
-  - 지정 함량 유무에 따라 농도 영향 검토 포인트 문구 분기
-- 미매핑 `ingredient_function` 감지 추가
-  - role 매핑에 없는 기능명을 데이터 로드 요약에 표시
-- 기존 미매핑 기능명 role 매핑 추가
-  - 항산화제, 항여드름제, 수렴제, 결합제, 광안정화제 등 support role로 연결
-  - 줄바꿈이 섞인 `ingredient_function` 정규화 추가
-- 기본 Backbone 설계 단계 추가
-  - `BackboneIngredient`, `BackboneDesign`, `BackboneDesigner` 추가
-  - 구조 골격의 role별 후보에서 실제 기본 성분과 기준 함량을 확정
-  - 연속상 역할군(`water_phase`, `dispersion_medium`, `oil_phase`)은 제형 목적에 따라 정하고 100% q.s.로 계산
-  - 비연속상 성분 함량은 DB median을 우선 사용하되 role별 기본 범위로 제한
-  - 액티브 적합성 검토가 `BackboneDesign`을 입력으로 받아 실제 기본 틀을 참고하도록 변경
-  - 출력 순서를 `[2. 구조 골격 설계] → [3. Backbone 설계] → [4. 액티브 적합성 검토] → [5. Backbone 수정 계획]`으로 변경했으며, 이후 4단계 표시로 통합
-- Backbone 설계 단계를 LLM 기반으로 보강
-  - `BackboneDesigner`가 Bedrock Claude에 제형 목적, 구조 골격, role별 후보, 후보 성분 통계, 유사 처방/co-occurrence 요약을 전달
-  - LLM이 실제 제형 성립을 위한 최소 구조 성분과 함량 조합을 JSON으로 설계
-  - Python이 후보 성분 whitelist, 허용 `backbone_type`, 허용 `system_checks`, 총합 100%를 검증
-  - LLM 실패 또는 검증 실패 시 기존 rule 기반 Backbone 설계를 fallback으로 사용
-  - `BackboneDesign`에 `backbone_type`, `design_summary`, `excluded_roles`, `system_checks` 추가
-- Backbone 설계 role 평가 기준 보강
-  - required role도 자동 포함하지 않고 물리적 안정성, 미생물 안정성, 사용감, 외관, 제조 가능성 기여도를 평가하도록 프롬프트 수정
-  - `buffer`, `ph_adjuster`, `stabilizer`, `rheology_modifier`, `solubilizer`는 금지가 아니라 자동 포함하지 말라는 의미로 문구 조정
-  - 포함 role의 `reason`과 제외 role의 `reason` 누락 시 warning을 남기도록 검증 보강
-- Backbone 설계의 액티브 참고 범위 조정
-  - `BackboneDesigner.design()`이 `QueryContext`를 선택 입력으로 받아 액티브 이름, 용해성, 안정 pH, 지정 함량을 LLM 참고 정보로 전달
-  - 액티브 성분 자체는 Backbone 성분으로 포함하지 않도록 프롬프트에 명시
-  - LLM이 액티브 성분을 Backbone 성분으로 출력하면 Python이 제거하고 warning을 남기도록 검증 추가
-- 액티브 검토와 Backbone 수정 계획 표시 통합
-  - 사용자 관점의 출력 단계를 `[4. 액티브 적합성 및 Backbone 수정 전략]`으로 통합
-  - `ActiveSuitabilityReviewer`와 `BackboneRevisionPlanner` 내부 클래스는 유지하되, Backbone 수정 계획은 4단계의 하위 전략 정리로 표시
-  - `BackboneRevisionPlanner` 프롬프트의 단계명을 통합 단계명으로 수정
-- Backbone 수정 전략의 role 승격 보수화
-  - `backbone_actions.add_role`을 반드시 추가 명령이 아니라 검토 후보로 해석하도록 프롬프트 수정
-  - `added_required_roles`는 현재 제형 목적상 최종 Backbone 구조에 반드시 필요한 role만 통과
-  - 검토 필요, 실측 후 판단, 조건부 적용, 낮은 우선순위 role은 `design_constraints`에만 남기도록 baseline/LLM 파싱 필터 보강
-  - pH, 점도, 산화, 외관, 사용감, 고농도 이슈는 role 추가가 아니라 실측/검토/설계 조건으로 정리하도록 action 생성과 전략 문구 보수화
-- 최종 Backbone 확정 단계 추가
-  - `FinalBackboneIngredient`, `FinalBackboneFormula`, `FinalBackboneValidation`, `FinalBackboneResult`, `FinalBackboneFinalizer` 추가
-  - v0.8 처방표 구조를 참고해 `name`, `concept`, `target_aspects`, `ingredients`, `design_rationale` 중심의 최종 Backbone 결과 생성
-  - LLM에는 제형 목적, 현재 Backbone, 액티브 검토 요약, Backbone 수정 전략, 관련 후보 성분/통계만 전달
-  - Python에서 DB 후보 성분 검증, 액티브 성분 제외, 지정 액티브 함량 예약, q.s. 연속상 보정, 총합 100% 검증, 함량 내림차순 정렬 수행
-  - 최종 q.s.는 `100 - 고정 Backbone 성분 합 - 지정 액티브 예약량`으로 계산
-  - q.s. 연속상 함량이 음수가 되면 최종 확정 실패와 `[3. Backbone 설계]` 재설계 피드백 반환
+단일 파일 `formulator_poc_v0.9.py`. 클래스 기반 14단계 파이프라인.
+현재는 `legacy/` 폴더로 이동됨.
 
-### 검증
-- `python -m py_compile formulator_poc_v0.9.py` 통과
-- `data.csv`, `product.csv`, `external.csv` 기본 로드 확인
-- Bedrock credentials가 없을 때 빈 `QueryContext`로 fallback 확인
+---
+
+## [v0.8 이전] (legacy/)
+
+초기 프로토타입. `legacy/` 폴더 참조.

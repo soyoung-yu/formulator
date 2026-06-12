@@ -113,7 +113,8 @@ def search_target_product(
         if _norm_name(fd.get("name", "")) == norm_query or product_name in fd.get("name", "")
     ]
     if inhouse_candidates:
-        inhouse_candidates.sort(key=lambda x: (-x[1].get("first_in", ""), x[1].get("name", "")))
+        inhouse_candidates.sort(key=lambda x: x[1].get("name", ""))
+        inhouse_candidates.sort(key=lambda x: x[1].get("first_in", ""), reverse=True)
         code, fd = inhouse_candidates[0]
         return {
             "source":       "자사",
@@ -131,7 +132,8 @@ def search_target_product(
         if _norm_name(title) == norm_query or product_name in title
     ]
     if external_candidates:
-        external_candidates.sort(key=lambda x: (-x[1].get("base_time", ""), x[0]))
+        external_candidates.sort(key=lambda x: x[0])
+        external_candidates.sort(key=lambda x: x[1].get("base_time", ""), reverse=True)
         title, data = external_candidates[0]
         return {
             "source":       "타사",

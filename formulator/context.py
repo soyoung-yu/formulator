@@ -138,39 +138,71 @@ def build_context(
             if name in ist:
                 allowed.add(name)
 
-    # base / active 성분 분리 (빈도 내림차순)
-    base_ings:   list[dict] = []
-    active_ings: list[dict] = []
-
+    # ── base 성분 (빈도 내림차순 top_base) ──────────────────────────────
+    base_ings: list[dict] = []
     for name, s in sorted(ist.items(), key=lambda x: -x[1]["frequency"]):
-        entry = {"name": name, **s}
         if s["structural_role"] in BASE_ROLES or name in _KNOWN_BASE:
             if len(base_ings) < top_base:
-                base_ings.append(entry)
-                allowed.add(name)   # 4) base 고빈도 top_base
-        else:
-            if name in user_ing_names:
-                active_ings.insert(0, entry)
-            elif len(active_ings) < top_active:
-                active_ings.append(entry)
-                allowed.add(name)   # 5) active 고빈도 top_active
+                base_ings.append({"name": name, **s})
+                allowed.add(name)
 
-    # allowed에 포함된 active 성분 중 active_ings에 없는 것 추가 (타겟·유사처방 출처)
-    exist_active = {a["name"] for a in active_ings}
-    for name in allowed:
-        if name in ist and name not in exist_active:
-            s = ist[name]
-            if s["structural_role"] not in BASE_ROLES and name not in _KNOWN_BASE:
-                active_ings.append({"name": name, **s})
-                exist_active.add(name)
+    # ── active 성분 4그룹 — 중복 없이 우선순위 순서로 배정 ───────────────
+    def _is_active(name: str, s: dict) -> bool:
+        return s["structural_role"] not in BASE_ROLES and name not in _KNOWN_BASE
+
+    assigned: set[str] = set()
+
+    # 1) 질의 지정 성분
+    query_active_ings: list[dict] = []
+    for name in user_ing_names:
+        if name in ist and _is_active(name, ist[name]):
+            query_active_ings.append({"name": name, **ist[name]})
+            assigned.add(name)
+            allowed.add(name)
+
+    # 2) 타겟 처방 성분 (known_set 매칭, 질의 성분 제외)
+    target_active_ings: list[dict] = []
+    if target_product:
+        for ing in target_product.get("ingredients", []):
+            name = ing.get("name", "")
+            if name in ist and _is_active(name, ist[name]) and name not in assigned:
+                target_active_ings.append({"name": name, **ist[name]})
+                assigned.add(name)
+                allowed.add(name)
+
+    # 3) 유사 처방 출현 성분 (위 그룹 제외)
+    similar_active_ings: list[dict] = []
+    seen_similar: set[str] = set()
+    for f in similar.get("group_a", []) + similar.get("group_b", []):
+        for name in f.get("ingredients", []):
+            if name in ist and _is_active(name, ist[name]) and name not in assigned and name not in seen_similar:
+                similar_active_ings.append({"name": name, **ist[name]})
+                seen_similar.add(name)
+                assigned.add(name)
+                allowed.add(name)
+
+    # 4) 범용 활성 성분 — 고빈도 top_active (위 그룹 제외)
+    general_active_ings: list[dict] = []
+    for name, s in sorted(ist.items(), key=lambda x: -x[1]["frequency"]):
+        if len(general_active_ings) >= top_active:
+            break
+        if _is_active(name, s) and name not in assigned:
+            general_active_ings.append({"name": name, **s})
+            allowed.add(name)
+
+    def _sort_by_freq(lst: list[dict]) -> list[dict]:
+        return sorted(lst, key=lambda x: (-x["frequency"], x["name"]))
 
     return {
-        "query_info":          query_info,
-        "ingredient_map":      ingredient_map,
-        "user_ing_names":      user_ing_names,
-        "matched_keywords":    matched_keywords,
-        "similar_formulas":    similar,
-        "base_ings":           base_ings,
-        "active_ings":         sorted(active_ings, key=lambda x: (-x["frequency"], x["name"])),
-        "allowed_ingredients": sorted(allowed),
+        "query_info":           query_info,
+        "ingredient_map":       ingredient_map,
+        "user_ing_names":       user_ing_names,
+        "matched_keywords":     matched_keywords,
+        "similar_formulas":     similar,
+        "base_ings":            base_ings,
+        "query_active_ings":    _sort_by_freq(query_active_ings),
+        "target_active_ings":   _sort_by_freq(target_active_ings),
+        "similar_active_ings":  _sort_by_freq(similar_active_ings),
+        "general_active_ings":  general_active_ings,   # 이미 빈도순
+        "allowed_ingredients":  sorted(allowed),
     }

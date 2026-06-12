@@ -110,10 +110,31 @@ def build_user_prompt(query: str, ctx: dict, total_formulas: int) -> str:
 
     # ── 성분 통계 ──────────────────────────────────────────────────────────
     lines.append(f"\n[성분 통계 — {total_formulas}건 처방 기준]")
-    for i in ctx.get("base_ings", [])[:12]:
-        lines.append(_format_stat_line(i))
-    for i in ctx.get("active_ings", []):
-        lines.append(_format_stat_line(i))
+
+    if base_ings := ctx.get("base_ings", []):
+        lines.append("▶ 구조 성분")
+        for i in base_ings:
+            lines.append(_format_stat_line(i))
+
+    if query_active := ctx.get("query_active_ings", []):
+        lines.append("▶ 질의 성분")
+        for i in query_active:
+            lines.append(_format_stat_line(i))
+
+    if target_active := ctx.get("target_active_ings", []):
+        lines.append("▶ 타겟 처방 성분")
+        for i in target_active:
+            lines.append(_format_stat_line(i))
+
+    if similar_active := ctx.get("similar_active_ings", []):
+        lines.append("▶ 유사 처방 성분")
+        for i in similar_active:
+            lines.append(_format_stat_line(i))
+
+    if general_active := ctx.get("general_active_ings", []):
+        lines.append("▶ 범용 활성 성분")
+        for i in general_active:
+            lines.append(_format_stat_line(i))
 
     # ── 성분명 매핑 (alias → DB명) ────────────────────────────────────────
     # ingredient_map에서 alias 매핑된 항목만 표시 (DB 직접 매칭은 자명하므로 제외)

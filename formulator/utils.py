@@ -116,10 +116,11 @@ def _safe_literal_list(value: Any) -> list:
 
 # ── 출력 포매팅 헬퍼 ────────────────────────────────────────────────────
 
-# 성분 통계 dict를 "빈도·함량 범위·중앙값" 형식의 한 줄 문자열로 포매팅
+# 성분 통계 dict를 "빈도·함량 범위·중앙값·역할" 형식의 한 줄 문자열로 포매팅
 def _format_stat_line(i: dict) -> str:
+    role = i.get("structural_role", "")
     return (
-        f"  · {i['name']}: 빈도 {i['frequency']*100:.0f}% ({i['count']}건), "
+        f"  · {i['name']} [{role}]: 빈도 {i['frequency']*100:.0f}% ({i['count']}건), "
         f"함량 {i['min']}~{i['max']}% (중앙값 {i['median']}%)"
     )
 

@@ -46,6 +46,7 @@ def load_formula_data(csv_path: str) -> tuple[pd.DataFrame, dict]:
 
         formula_dict[bulk_code] = {
             "name":             grp["bulk_name"].iloc[0],
+            "first_in":         str(grp["first_in"].iloc[0]) if "first_in" in grp.columns else "",
             "ingredients":      ingredients,
             "structural_roles": structural_roles,
         }
@@ -121,7 +122,7 @@ def load_product_data(product_csv: str, formula_dict: dict) -> dict:
 
 
 # 타사 제품 CSV를 로드해 {title: [성분명, ...]} 형태의 external_db 반환
-def load_external_data(csv_path: str) -> dict[str, list[str]]:
+def load_external_data(csv_path: str) -> dict[str, dict]:
     try:
         df = pd.read_csv(csv_path, engine="python")
     except FileNotFoundError:
@@ -133,12 +134,16 @@ def load_external_data(csv_path: str) -> dict[str, list[str]]:
         console.print(f"[yellow]⚠ 타사 데이터 필수 컬럼 누락: {missing}[/yellow]")
         return {}
 
-    external_db: dict[str, list[str]] = {}
+    # {title: {"ingredients": [...], "base_time": "YYYY-MM-DD"}}
+    external_db: dict[str, dict] = {}
     for _, row in df.iterrows():
         title = str(row["title"]).strip()
         ings  = [s.strip() for s in str(row["representation_ingredients"]).split("|") if s.strip()]
         if title and ings:
-            external_db[title] = ings
+            external_db[title] = {
+                "ingredients": ings,
+                "base_time":   str(row.get("base_time", "")),
+            }
 
     console.print(f"[green]✓ 타사 제품 데이터: {len(external_db)}건 로드[/green]")
     return external_db

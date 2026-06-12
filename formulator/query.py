@@ -99,35 +99,45 @@ def extract_query_supplements(
 
 
 # 제품명으로 자사(formula_dict) → 타사(external_db) 순서로 탐색해 타겟 처방 정보를 반환
+# 여러 매칭 시 날짜(first_in / base_time) 내림차순 → 가나다 순으로 최우선 항목 선택
 def search_target_product(
     product_name: str,
     formula_dict: dict,
-    external_db: dict[str, list[str]],
+    external_db: dict[str, dict],
 ) -> dict | None:
     norm_query = _norm_name(product_name)
 
-    # 1) 자사 처방 탐색
-    for code, fd in formula_dict.items():
-        if _norm_name(fd.get("name", "")) == norm_query or product_name in fd.get("name", ""):
-            ings = fd["ingredients"]
-            return {
-                "source":       "자사",
-                "product_name": fd["name"],
-                "code":         code,
-                "ingredients":  [
-                    {"name": n, "content": c}
-                    for n, c in sorted(ings.items(), key=lambda x: -x[1])
-                ],
-            }
+    # 1) 자사 처방 — 후보 수집 후 정렬
+    inhouse_candidates = [
+        (code, fd) for code, fd in formula_dict.items()
+        if _norm_name(fd.get("name", "")) == norm_query or product_name in fd.get("name", "")
+    ]
+    if inhouse_candidates:
+        inhouse_candidates.sort(key=lambda x: (-x[1].get("first_in", ""), x[1].get("name", "")))
+        code, fd = inhouse_candidates[0]
+        return {
+            "source":       "자사",
+            "product_name": fd["name"],
+            "code":         code,
+            "ingredients":  [
+                {"name": n, "content": c}
+                for n, c in sorted(fd["ingredients"].items(), key=lambda x: -x[1])
+            ],
+        }
 
-    # 2) 타사 데이터 탐색
-    for title, ing_list in external_db.items():
-        if _norm_name(title) == norm_query or product_name in title:
-            return {
-                "source":       "타사",
-                "product_name": title,
-                "code":         None,
-                "ingredients":  [{"name": n, "content": None} for n in ing_list],
-            }
+    # 2) 타사 데이터 — 후보 수집 후 정렬
+    external_candidates = [
+        (title, data) for title, data in external_db.items()
+        if _norm_name(title) == norm_query or product_name in title
+    ]
+    if external_candidates:
+        external_candidates.sort(key=lambda x: (-x[1].get("base_time", ""), x[0]))
+        title, data = external_candidates[0]
+        return {
+            "source":       "타사",
+            "product_name": title,
+            "code":         None,
+            "ingredients":  [{"name": n, "content": None} for n in data["ingredients"]],
+        }
 
     return None

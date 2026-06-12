@@ -105,7 +105,8 @@ def run_pipeline(
 
     # 8. 후처리 (화이트리스트 검증 + 합계 보정)
     formula_data = validate_and_fix(
-        formula_data, stats, known_set=known_set, user_constraints=user_constraints
+        formula_data, stats, known_set=known_set, user_constraints=user_constraints,
+        bedrock_client=bedrock_client, model_id=model_id,
     )
 
     # 9. 출력 & 저장

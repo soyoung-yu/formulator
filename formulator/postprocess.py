@@ -1,9 +1,47 @@
 """
 후처리 및 검증.
-  - validate_and_fix(): 화이트리스트 exact match + 정제수 합계 보정
+  - validate_and_fix(): 화이트리스트 exact match + LLM 대체 탐색 + 정제수 합계 보정
 """
 
-from formulator.utils import _norm_name, console
+from typing import Any
+
+from formulator.utils import _invoke_bedrock_json, _norm_name, console
+
+
+# DB 미매칭 성분에 대해 LLM으로 대체 성분 3개를 제안받고 known_set에서 첫 번째 매칭을 반환
+def _suggest_substitutes(
+    name: str,
+    role: str,
+    known_set: set[str],
+    bedrock_client: Any,
+    model_id: str,
+) -> str | None:
+    prompt = (
+        f"화장품 처방에서 '{name}'({role}) 성분을 대체할 수 있는 성분 3개를 제시하세요.\n\n"
+        "다음 항목을 모두 검토하여 가장 유사한 성분을 추천하세요:\n"
+        "- 주요 효능 (보습·미백·주름개선 등)\n"
+        "- 역할 (pH 조절제·점증제·유화제 등)\n"
+        "- 점도 영향성\n"
+        "- pH 영향성\n"
+        "- 규제 (사용 농도 제한, 금지 여부 등)\n\n"
+        "JSON만 반환 (화장품 원료 공식 명칭 사용):\n"
+        "{\"substitutes\": [\"성분명1\", \"성분명2\", \"성분명3\"]}"
+    )
+    try:
+        result, _ = _invoke_bedrock_json(bedrock_client, model_id, prompt, max_tokens=256)
+        candidates = result.get("substitutes", []) if isinstance(result, dict) else []
+        norm_known = {_norm_name(k): k for k in known_set}
+        for candidate in candidates:
+            if not isinstance(candidate, str):
+                continue
+            if candidate in known_set:
+                return candidate
+            normed = _norm_name(candidate)
+            if normed in norm_known:
+                return norm_known[normed]
+    except Exception:
+        pass
+    return None
 
 
 def validate_and_fix(
@@ -11,6 +49,8 @@ def validate_and_fix(
     stats: dict,
     known_set: set[str] | None = None,
     user_constraints: dict[str, float] | None = None,
+    bedrock_client: Any = None,
+    model_id: str | None = None,
 ) -> dict:
     """
     1) 화이트리스트 검증: 정규화 exact match → 불일치 시 조용히 제거
@@ -38,7 +78,19 @@ def validate_and_fix(
                 if matched:
                     ing["name"] = matched
                     checked.append(ing)
-                # 매핑 불가 → 제거 (조용히)
+                elif bedrock_client and model_id:
+                    # 매핑 불가 → LLM 대체 성분 탐색
+                    console.print(f"[yellow]  ⚠ '{name}' — DB에 없음. 대체 성분 탐색 중...[/yellow]")
+                    substitute = _suggest_substitutes(
+                        name, ing.get("role", ""), known_set, bedrock_client, model_id
+                    )
+                    if substitute:
+                        console.print(f"[yellow]    → '{substitute}'로 교체 (대체 성분 매칭)[/yellow]")
+                        ing["name"] = substitute
+                        checked.append(ing)
+                    else:
+                        console.print(f"[yellow]  ⚠ '{name}' — 대체 성분 3개 모두 미매칭 → 제거[/yellow]")
+                # bedrock_client 없으면 기존처럼 조용히 제거
             formula["ingredients"] = checked
 
         ings = formula.get("ingredients", [])

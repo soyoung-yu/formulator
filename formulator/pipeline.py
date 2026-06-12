@@ -61,14 +61,16 @@ def run_pipeline(
     console.print(f"[dim]  마케팅 힌트: {query_info['marketing_hints']}[/dim]")
 
     # 5. 함량 추출 (LLM — 질의에 숫자% 있을 때만 호출)
-    all_db_names = [
-        db_name
-        for mapped in ingredient_map.values()
-        for db_name in mapped
-    ]
-    user_constraints: dict[str, float] = extract_amount_constraints(
-        query, all_db_names, bedrock_client, model_id
+    # 질의에 표현된 성분명(ingredient_map 키)을 그대로 전달해야 LLM이 올바르게 매칭
+    raw_constraints: dict[str, float] = extract_amount_constraints(
+        query, list(ingredient_map.keys()), bedrock_client, model_id
     )
+    # alias 키 → DB 성분명으로 확장 (다중 매핑 시 모든 후보에 동일 함량 적용)
+    user_constraints: dict[str, float] = {
+        db_name: amount
+        for term, amount in raw_constraints.items()
+        for db_name in ingredient_map[term]
+    }
     if user_constraints:
         console.print(f"[dim]  사용자 지정 함량: {user_constraints}[/dim]")
 

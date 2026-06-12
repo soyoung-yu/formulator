@@ -93,44 +93,34 @@
 `query_info` 구조:
 ```python
 {
-  "ingredients":       list[str],          # 추출된 성분명 (DB명 또는 alias 키)
-  "constraints":       dict[str, None],    # 함량은 5b 단계에서 채워짐
+  "ingredient_map":    dict[str, list[str]],  # 질의 표현 → DB 성분명 리스트
   "formulation_hints": list[str],
   "marketing_hints":   list[str]
 }
 ```
 
----
-
-## 5. 성분명 매핑
-
-| 항목 | 내용 |
-|------|------|
-| 함수 | `map_ingredients(terms, known_set)` |
-| 모듈 | `query.py` |
-| 입력 | 추출된 성분명 리스트, DB 성분명 set |
-| 출력 | `ingredient_map: dict[str, list[str] \| None]` |
-| LLM | 없음 |
-
+`ingredient_map` 예시:
 ```python
 {
-  "나이아신아마이드": ["나이아신아마이드"],   # DB 직접 매칭
-  "시카":            ["병풀추출물"],          # ALIAS_HINTS 확장
-  "알수없는성분":    None                    # 매핑 실패
+  "나이아신아마이드": ["나이아신아마이드"],          # DB 직접 매칭
+  "시카":            ["병풀추출물", "병풀잎추출물"],  # ALIAS_HINTS 확장
 }
 ```
 
 ---
 
-## 5b. 함량 제약 추출
+## 5. 함량 제약 추출
 
 | 항목 | 내용 |
 |------|------|
 | 함수 | `extract_amount_constraints(query, ingredient_names, bedrock_client, model_id)` |
 | 모듈 | `query.py` |
-| 입력 | 질의 문자열, DB 성분명 리스트, Bedrock 클라이언트 |
-| 출력 | `user_constraints: dict[str, float]` |
+| 입력 | 질의 문자열, `ingredient_map.keys()` (질의 표현 그대로), Bedrock 클라이언트 |
+| 출력 | `raw_constraints: dict[str, float]` → alias 키 → DB명 확장 후 `user_constraints` |
 | LLM | 숫자% 패턴 있을 때만 1회 |
+
+Python이 regex로 함량 값을 먼저 추출하고, LLM은 `[질의]` + `[추출된 성분]` + `[추출된 함량]` 세 섹션을 함께 보고 매핑한다.
+alias 키 → DB 성분명 확장은 LLM 반환 후 Python이 처리 (다중 매핑 시 모든 후보에 동일 함량).
 
 실패 시: `{}` 반환, 파이프라인 계속 진행.
 

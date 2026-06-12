@@ -66,21 +66,23 @@ def extract_amount_constraints(
     질의에 숫자% 표현이 있을 때, LLM으로 어떤 성분에 어떤 함량이 지정됐는지 연결한다.
     함량 언급이 없으면 LLM 호출 없이 빈 dict 반환.
 
-    Returns: {db_ingredient_name: amount_float}
+    Returns: {ingredient_name: amount_float}
     """
-    if not re.search(r'\d+(?:\.\d+)?\s*%', query):
+    amounts = re.findall(r'\d+(?:\.\d+)?(?=\s*%)', query)
+    if not amounts:
         return {}
     if not ingredient_names or not bedrock_client or not model_id:
         return {}
 
-    ings_str = "\n".join(f"- {n}" for n in ingredient_names)
+    ings_str     = "\n".join(f"- {n}" for n in ingredient_names)
+    amounts_str  = "\n".join(f"- {a}%" for a in amounts)
     prompt = (
-        "화장품 처방 요청 질의에서 각 성분에 지정된 함량(%)을 추출하세요.\n\n"
+        "아래 질의, 추출된 성분, 추출된 함량을 함께 보고 각 성분에 해당하는 함량을 연결하세요.\n\n"
         f"[질의]\n{query}\n\n"
-        f"[추출된 성분 목록]\n{ings_str}\n\n"
+        f"[추출된 성분]\n{ings_str}\n\n"
+        f"[추출된 함량]\n{amounts_str}\n\n"
         "규칙:\n"
-        "- 질의에서 함량이 명시된 성분만 포함하세요.\n"
-        "- 함량이 없는 성분은 결과에서 제외하세요.\n"
+        "- 함량이 연결되지 않는 성분은 결과에서 제외하세요.\n"
         "- 성분명은 위 목록의 표기 그대로 사용하세요.\n\n"
         "JSON만 반환:\n"
         "{\"성분명\": 숫자, ...}"

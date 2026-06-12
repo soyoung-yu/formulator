@@ -109,10 +109,23 @@ def build_user_prompt(query: str, ctx: dict, total_formulas: int) -> str:
 
     # ── 사용자 지정 함량 ───────────────────────────────────────────────────
     user_constraints: dict = ctx.get("user_constraints", {})
+    ingredient_map: dict   = ctx.get("ingredient_map", {})
     if user_constraints:
         lines.append("\n[사용자 지정 함량 — 반드시 이 함량 정확히 준수]")
+        shown: set = set()
+        # alias 다중 매핑 후보는 "A 또는 B: X%" 형태로 묶어서 표시
+        for db_names in ingredient_map.values():
+            candidates = [n for n in db_names if n in user_constraints]
+            if not candidates:
+                continue
+            amt   = user_constraints[candidates[0]]
+            label = " 또는 ".join(candidates)
+            lines.append(f"  · {label}: 정확히 {amt}%")
+            shown.update(candidates)
+        # DB명 직접 매칭된 성분 (alias 확장 없음)
         for db_name, amt in user_constraints.items():
-            lines.append(f"  · {db_name}: 정확히 {amt}%")
+            if db_name not in shown:
+                lines.append(f"  · {db_name}: 정확히 {amt}%")
 
     # ── 허용 성분 목록 ────────────────────────────────────────────────────
     allowed = ctx.get("allowed_ingredients", [])

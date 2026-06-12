@@ -193,16 +193,20 @@ def build_context(
     def _sort_by_freq(lst: list[dict]) -> list[dict]:
         return sorted(lst, key=lambda x: (-x["frequency"], x["name"]))
 
+    # 통계 섹션에 등장하지 않은 나머지 DB 전체 성분 (이름만)
+    remaining_ingredients = sorted(set(ist.keys()) - allowed)
+
     return {
-        "query_info":           query_info,
-        "ingredient_map":       ingredient_map,
-        "user_ing_names":       user_ing_names,
-        "matched_keywords":     matched_keywords,
-        "similar_formulas":     similar,
-        "base_ings":            base_ings,
-        "query_active_ings":    _sort_by_freq(query_active_ings),
-        "target_active_ings":   _sort_by_freq(target_active_ings),
-        "similar_active_ings":  _sort_by_freq(similar_active_ings),
-        "general_active_ings":  general_active_ings,   # 이미 빈도순
-        "allowed_ingredients":  sorted(allowed),
+        "query_info":              query_info,
+        "ingredient_map":          ingredient_map,
+        "user_ing_names":          user_ing_names,
+        "matched_keywords":        matched_keywords,
+        "similar_formulas":        similar,
+        "base_ings":               base_ings,
+        "query_active_ings":       _sort_by_freq(query_active_ings),
+        "target_active_ings":      _sort_by_freq(target_active_ings),
+        "similar_active_ings":     _sort_by_freq(similar_active_ings),
+        "general_active_ings":     general_active_ings,
+        "allowed_ingredients":     sorted(allowed),
+        "remaining_ingredients":   remaining_ingredients,
     }

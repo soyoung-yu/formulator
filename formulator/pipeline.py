@@ -128,7 +128,8 @@ def run_pipeline(
         f"[green]✓ base {len(ctx['base_ings'])}종 / active(질의{len(ctx['query_active_ings'])}·타겟{len(ctx['target_active_ings'])}·유사{len(ctx['similar_active_ings'])}·범용{len(ctx['general_active_ings'])})종 / "
         f"유사처방 그룹A {len(ctx['similar_formulas'].get('group_a',[]))}건 "
         f"그룹B {len(ctx['similar_formulas'].get('group_b',[]))}건 / "
-        f"허용 성분 {len(ctx['allowed_ingredients'])}종[/green]"
+        f"허용 성분 {len(ctx['allowed_ingredients']) + len(ctx['remaining_ingredients'])}종 "
+        f"(통계 {len(ctx['allowed_ingredients'])}+나머지 {len(ctx['remaining_ingredients'])})[/green]"
     )
 
     # 7. LLM 1회 호출 — 처방 3안 생성

@@ -169,12 +169,13 @@ def build_user_prompt(query: str, ctx: dict, total_formulas: int) -> str:
                 lines.append(f"  · {db_name}: 정확히 {amt}%")
 
     # ── 허용 성분 목록 ────────────────────────────────────────────────────
-    allowed = ctx.get("allowed_ingredients", [])
-    if allowed:
-        lines.append(
-            f"\n[허용 성분 목록 — 반드시 이 목록에서만 선택 (총 {len(allowed)}종)]\n"
-            + ", ".join(allowed)
-        )
+    allowed    = ctx.get("allowed_ingredients", [])
+    remaining  = ctx.get("remaining_ingredients", [])
+    total      = len(allowed) + len(remaining)
+    lines.append(f"\n[허용 성분 목록 — 반드시 이 목록에서만 선택 (총 {total}종)]")
+    lines.append("유사 처방 및 성분 통계에 등장한 모든 성분 사용 가능.")
+    if remaining:
+        lines.append(f"추가 허용 성분 ({len(remaining)}종): {', '.join(remaining)}")
 
     # ── 3안 설계 지침 ─────────────────────────────────────────────────────
     lines.append(

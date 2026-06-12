@@ -10,7 +10,7 @@ from formulator.data import build_stats, load_external_data, load_formula_data, 
 from formulator.llm import _create_bedrock_client, call_llm
 from formulator.output import print_cost_summary, print_results, save_results
 from formulator.postprocess import validate_and_fix
-from formulator.query import extract_amount_constraints, extract_query_info, find_target_product
+from formulator.query import extract_query_info, extract_query_supplements, search_target_product
 from formulator.utils import console
 
 
@@ -60,29 +60,46 @@ def run_pipeline(
     ingredient_map = query_info["ingredient_map"]
     for term, mapped in ingredient_map.items():
         console.print(f"[dim]  '{term}' → {mapped}[/dim]")
-    console.print(f"[dim]  제형 힌트: {query_info['formulation_hints']}[/dim]")
     console.print(f"[dim]  마케팅 힌트: {query_info['marketing_hints']}[/dim]")
 
-    # 4b. 타겟 제품 탐색 (LLM — 질의에 제품명 언급 있을 때만 결과 반환)
-    console.print("[dim]타겟 제품 탐색 중...[/dim]")
-    target_product = find_target_product(
-        query, formula_dict, external_db, bedrock_client, model_id
+    # 4b. 질의 보완 추출 + 성분-함량 연결 (LLM 1회)
+    console.print("[dim]질의 보완 추출 중 (LLM)...[/dim]")
+    supplements = extract_query_supplements(
+        query,
+        list(ingredient_map.keys()),
+        query_info["marketing_hints"],
+        bedrock_client,
+        model_id,
     )
-    if target_product:
-        src = target_product["source"]
-        console.print(f"[green]✓ 타겟 제품 [{src}] '{target_product['product_name']}' 매칭[/green]")
-    else:
-        console.print("[dim]  타겟 제품 언급 없음[/dim]")
 
-    # 5. 함량 추출 (LLM — 질의에 숫자% 있을 때만 호출)
-    # 질의에 표현된 성분명(ingredient_map 키)을 그대로 전달해야 LLM이 올바르게 매칭
-    raw_constraints: dict[str, float] = extract_amount_constraints(
-        query, list(ingredient_map.keys()), bedrock_client, model_id
-    )
+    # 타겟 제품 DB 탐색 (Python — LLM이 추출한 제품명 기반)
+    target_product = None
+    if pname := supplements.get("target_product"):
+        target_product = search_target_product(pname, formula_dict, external_db)
+        if target_product:
+            src = target_product["source"]
+            console.print(f"[green]✓ 타겟 제품 [{src}] '{target_product['product_name']}' 매칭[/green]")
+        else:
+            console.print(f"[dim]  타겟 제품 '{pname}' — DB 미매칭[/dim]")
+
+    # 추가 키워드·사용감 병합
+    extra_keywords: list[str] = supplements.get("additional_keywords", [])
+    if extra_keywords:
+        query_info["marketing_hints"] = query_info["marketing_hints"] + extra_keywords
+        console.print(f"[dim]  추가 키워드: {extra_keywords}[/dim]")
+
+    # 추가 성분 (DB 미검증 → 힌트로만 전달)
+    additional_ingredients: list[str] = supplements.get("additional_ingredients", [])
+    if additional_ingredients:
+        console.print(f"[dim]  추가 성분 힌트: {additional_ingredients}[/dim]")
+
+    # 성분-함량 연결 결과 → user_constraints로 확장
+    raw_constraints: dict[str, float] = supplements.get("ingredient_amounts", {})
     # alias 키 → DB 성분명으로 확장 (다중 매핑 시 모든 후보에 동일 함량 적용)
     user_constraints: dict[str, float] = {
         db_name: amount
         for term, amount in raw_constraints.items()
+        if term in ingredient_map
         for db_name in ingredient_map[term]
     }
     if user_constraints:
@@ -102,9 +119,10 @@ def run_pipeline(
     ctx = build_context(
         stats, keyword_db, formula_dict, query_info, ingredient_map
     )
-    ctx["total_formulas"]   = stats["total_formulas"]
-    ctx["user_constraints"] = user_constraints
-    ctx["target_product"]   = target_product
+    ctx["total_formulas"]          = stats["total_formulas"]
+    ctx["user_constraints"]        = user_constraints
+    ctx["target_product"]          = target_product
+    ctx["additional_ingredients"]  = additional_ingredients
     console.print(
         f"[green]✓ base {len(ctx['base_ings'])}종 / active {len(ctx['active_ings'])}종 / "
         f"유사처방 그룹A {len(ctx['similar_formulas'].get('group_a',[]))}건 "

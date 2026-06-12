@@ -51,10 +51,7 @@ def build_user_prompt(query: str, ctx: dict, total_formulas: int) -> str:
     # ── 요구사항 ──────────────────────────────────────────────────────────
     lines.append(f"[요구사항]\n{query}")
 
-    formulation_hints = query_info.get("formulation_hints", [])
-    marketing_hints   = query_info.get("marketing_hints", [])
-    if formulation_hints:
-        lines.append(f"\n[제형·사용감 요구]\n  {', '.join(formulation_hints)}")
+    marketing_hints = query_info.get("marketing_hints", [])
     if marketing_hints:
         lines.append(f"\n[마케팅 포인트]\n  {', '.join(marketing_hints)}")
 
@@ -71,6 +68,14 @@ def build_user_prompt(query: str, ctx: dict, total_formulas: int) -> str:
         else:
             lines.append(f"\n[타겟 처방 정보 — 타사 제품 참고 (함량 미공개) / 최우선 참고]\n  제품명: {pname}")
             lines.append(f"  전성분 (함량 내림차순): {', '.join(i['name'] for i in ings)}")
+
+    # ── 추가 성분 요청 (DB 미검증 힌트) ──────────────────────────────────
+    additional_ingredients = ctx.get("additional_ingredients", [])
+    if additional_ingredients:
+        lines.append(
+            "\n[추가 성분 요청 — DB 미검증, 허용 성분 목록 내 유사 성분으로 대체 가능]\n"
+            + ", ".join(additional_ingredients)
+        )
 
     # ── 유사 처방 ─────────────────────────────────────────────────────────
     similar  = ctx.get("similar_formulas", {})
@@ -159,8 +164,6 @@ def build_user_prompt(query: str, ctx: dict, total_formulas: int) -> str:
         "- 각 안의 함량 합계가 정확히 100.00%가 되도록 정제수 함량으로 조정하세요.\n"
         "- [허용 성분 목록]에 없는 성분은 절대 사용하지 마세요."
     )
-    if formulation_hints:
-        lines.append(f"- 사용감 요구({', '.join(formulation_hints)})를 성분 선택·함량에 반영하세요.")
     if marketing_hints:
         lines.append(f"- 마케팅 포인트({', '.join(marketing_hints)})를 target_aspects와 설계 근거에 반영하세요.")
 

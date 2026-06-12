@@ -1,14 +1,14 @@
 """
 질의 분석 및 성분명 매핑.
-  - extract_query_info(): DB set + ALIAS_HINTS 기반 질의 분석 (LLM 없음), ingredient_map 직접 반환
-  - extract_amount_constraints(): LLM으로 질의 내 함량 정보를 성분에 연결
-  - find_target_product(): LLM으로 질의 내 제품명 추출 후 자사→타사 순서로 탐색
+  - extract_query_info(): DB set + ALIAS_HINTS 기반 질의 분석 (LLM 없음)
+  - extract_query_supplements(): Python 추출 결과를 보완하는 단일 LLM 호출
+  - search_target_product(): 제품명으로 자사→타사 DB 탐색 (LLM 없음)
 """
 
 import re
 from typing import Any
 
-from formulator.config import ALIAS_HINTS, FORMULATION_HINT_KEYWORDS, MARKETING_HINT_KEYWORDS
+from formulator.config import ALIAS_HINTS, MARKETING_HINT_KEYWORDS
 from formulator.utils import _invoke_bedrock_json, _norm_name, console
 
 
@@ -28,9 +28,8 @@ def extract_query_info(
 
     Returns:
         {
-          "ingredient_map":   {"나이아신아마이드": ["나이아신아마이드"], "시카": ["병풀추출물"]},
-          "formulation_hints":["에센스"],
-          "marketing_hints":  ["수분감", "보습감"],
+          "ingredient_map":  {"나이아신아마이드": ["나이아신아마이드"], "시카": ["병풀추출물"]},
+          "marketing_hints": ["수분감", "보습감"],
         }
     """
     ingredient_map: dict[str, list[str]] = {}
@@ -46,45 +45,68 @@ def extract_query_info(
         if alias.lower() in query.lower():
             ingredient_map[alias] = db_names
 
-    formulation_hints = [kw for kw in FORMULATION_HINT_KEYWORDS if kw in query]
-    kw_source         = marketing_keywords if marketing_keywords is not None else set(MARKETING_HINT_KEYWORDS)
-    marketing_hints   = [kw for kw in kw_source if kw in query]
+    kw_source       = marketing_keywords if marketing_keywords is not None else set(MARKETING_HINT_KEYWORDS)
+    marketing_hints = [kw for kw in kw_source if kw in query]
 
     return {
-        "ingredient_map":    ingredient_map,
-        "formulation_hints": formulation_hints,
-        "marketing_hints":   marketing_hints,
+        "ingredient_map":  ingredient_map,
+        "marketing_hints": marketing_hints,
     }
 
 
-# 질의에서 언급된 제품명을 LLM으로 추출한 뒤 자사→타사 순서로 탐색해 타겟 처방 정보를 반환
-def find_target_product(
+# Python 추출 결과를 보완하는 단일 LLM 호출 — 타겟 제품명·추가 성분·추가 키워드·성분-함량 연결 동시 반환
+def extract_query_supplements(
     query: str,
-    formula_dict: dict,
-    external_db: dict[str, list[str]],
+    ingredient_names: list[str],
+    marketing_hints: list[str],
     bedrock_client: Any,
     model_id: str,
-) -> dict | None:
-    # LLM으로 질의에서 제품명 언급 추출
+) -> dict:
+    amounts = re.findall(r'\d+(?:\.\d+)?(?=\s*%)', query)
+
+    ings_str    = ", ".join(ingredient_names) if ingredient_names else "없음"
+    kws_str     = ", ".join(marketing_hints)  if marketing_hints  else "없음"
+    amounts_str = ", ".join(f"{a}%" for a in amounts) if amounts else "없음"
+
     prompt = (
-        "아래 화장품 처방 요청 질의에서 참고 또는 유사 제품으로 언급된 제품명을 추출하세요.\n"
-        "제품명이 없으면 null을 반환하세요.\n\n"
+        "아래 화장품 처방 요청 질의와 Python 추출 결과를 보고, 누락된 항목을 보완하세요.\n\n"
         f"[질의]\n{query}\n\n"
+        "[Python 추출 결과]\n"
+        f"- 성분명: {ings_str}\n"
+        f"- 마케팅·사용감 키워드: {kws_str}\n"
+        f"- 함량값: {amounts_str}\n\n"
+        "추출 규칙:\n"
+        "1. target_product: 질의에서 참고/유사 제품으로 언급된 제품명. 없으면 null.\n"
+        "2. additional_ingredients: Python이 놓친 추가 성분명. 없으면 [].\n"
+        "3. additional_keywords: Python이 놓친 마케팅·사용감 키워드. 없으면 [].\n"
+        "4. ingredient_amounts: 성분-함량 연결. 함량이 지정된 성분만 포함, 없으면 {}.\n"
+        "   성분명은 Python 추출 결과의 표기 그대로 사용.\n\n"
         "JSON만 반환:\n"
-        "{\"product_name\": \"제품명\" 또는 null}"
+        '{"target_product": "제품명" or null, '
+        '"additional_ingredients": [...], '
+        '"additional_keywords": [...], '
+        '"ingredient_amounts": {"성분명": 숫자, ...}}'
     )
+
     try:
-        result, _ = _invoke_bedrock_json(bedrock_client, model_id, prompt, max_tokens=128)
-        product_name = result.get("product_name") if isinstance(result, dict) else None
-    except Exception:
-        return None
+        result, _ = _invoke_bedrock_json(bedrock_client, model_id, prompt, max_tokens=512)
+        if not isinstance(result, dict):
+            return {}
+        return result
+    except Exception as e:
+        console.print(f"[yellow]질의 보완 추출 실패: {e}[/yellow]")
+        return {}
 
-    if not product_name:
-        return None
 
+# 제품명으로 자사(formula_dict) → 타사(external_db) 순서로 탐색해 타겟 처방 정보를 반환
+def search_target_product(
+    product_name: str,
+    formula_dict: dict,
+    external_db: dict[str, list[str]],
+) -> dict | None:
     norm_query = _norm_name(product_name)
 
-    # 1) 자사 처방에서 탐색 (formula_dict의 name 필드)
+    # 1) 자사 처방 탐색
     for code, fd in formula_dict.items():
         if _norm_name(fd.get("name", "")) == norm_query or product_name in fd.get("name", ""):
             ings = fd["ingredients"]
@@ -98,7 +120,7 @@ def find_target_product(
                 ],
             }
 
-    # 2) 타사 데이터에서 탐색 (external_db의 title)
+    # 2) 타사 데이터 탐색
     for title, ing_list in external_db.items():
         if _norm_name(title) == norm_query or product_name in title:
             return {
@@ -109,49 +131,3 @@ def find_target_product(
             }
 
     return None
-
-
-def extract_amount_constraints(
-    query: str,
-    ingredient_names: list[str],
-    bedrock_client: Any,
-    model_id: str,
-) -> dict[str, float]:
-    """
-    질의에 숫자% 표현이 있을 때, LLM으로 어떤 성분에 어떤 함량이 지정됐는지 연결한다.
-    함량 언급이 없으면 LLM 호출 없이 빈 dict 반환.
-
-    Returns: {ingredient_name: amount_float}
-    """
-    amounts = re.findall(r'\d+(?:\.\d+)?(?=\s*%)', query)
-    if not amounts:
-        return {}
-    if not ingredient_names or not bedrock_client or not model_id:
-        return {}
-
-    ings_str     = "\n".join(f"- {n}" for n in ingredient_names)
-    amounts_str  = "\n".join(f"- {a}%" for a in amounts)
-    prompt = (
-        "아래 질의, 추출된 성분, 추출된 함량을 함께 보고 각 성분에 해당하는 함량을 연결하세요.\n\n"
-        f"[질의]\n{query}\n\n"
-        f"[추출된 성분]\n{ings_str}\n\n"
-        f"[추출된 함량]\n{amounts_str}\n\n"
-        "규칙:\n"
-        "- 함량이 연결되지 않는 성분은 결과에서 제외하세요.\n"
-        "- 성분명은 위 목록의 표기 그대로 사용하세요.\n\n"
-        "JSON만 반환:\n"
-        "{\"성분명\": 숫자, ...}"
-    )
-
-    try:
-        result, _ = _invoke_bedrock_json(bedrock_client, model_id, prompt, max_tokens=512)
-        valid = {}
-        for name, val in result.items():
-            if name in ingredient_names and isinstance(val, (int, float)) and val > 0:
-                valid[name] = float(val)
-        return valid
-    except Exception as e:
-        console.print(f"[yellow]함량 추출 Claude 호출 실패: {e}[/yellow]")
-        return {}
-
-

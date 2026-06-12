@@ -5,6 +5,7 @@
 변경 빈도가 높은 파일. 프롬프트만 수정할 때 이 파일만 열면 된다.
 """
 
+from formulator.config import TACIT_KNOWLEDGE
 from formulator.utils import _format_stat_line
 
 SYSTEM_PROMPT = """당신은 화장품 처방 전문가입니다. 연구원이 실험을 시작할 수 있는 초기 처방 백본을 설계합니다.
@@ -176,6 +177,20 @@ def build_user_prompt(query: str, ctx: dict, total_formulas: int) -> str:
     lines.append("유사 처방 및 성분 통계에 등장한 모든 성분 사용 가능.")
     if remaining:
         lines.append(f"추가 허용 성분 ({len(remaining)}종): {', '.join(remaining)}")
+
+    # ── 연구원 노하우 (allowed_ingredients 교차) ──────────────────────────
+    allowed_set = set(ctx.get("allowed_ingredients", []))
+    tacit_lines: list[str] = []
+    for key, note in TACIT_KNOWLEDGE.items():
+        if isinstance(key, tuple):
+            if all(k in allowed_set for k in key):
+                tacit_lines.append(f"  · {' + '.join(key)}: {note}")
+        else:
+            if key in allowed_set:
+                tacit_lines.append(f"  · {key}: {note}")
+    if tacit_lines:
+        lines.append("\n[연구원 노하우]")
+        lines.extend(tacit_lines)
 
     # ── 3안 설계 지침 ─────────────────────────────────────────────────────
     lines.append(

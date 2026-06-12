@@ -1,15 +1,14 @@
 """
 질의 분석 및 성분명 매핑.
-  - extract_query_info(): DB set + ALIAS_HINTS 기반 질의 분석 (LLM 없음)
+  - extract_query_info(): DB set + ALIAS_HINTS 기반 질의 분석 (LLM 없음), ingredient_map 직접 반환
   - extract_amount_constraints(): LLM으로 질의 내 함량 정보를 성분에 연결 (옵션 C)
-  - map_ingredients(): ALIAS_HINTS → DB 성분명 확장
 """
 
 import re
 from typing import Any
 
 from formulator.config import ALIAS_HINTS, FORMULATION_HINT_KEYWORDS, MARKETING_HINT_KEYWORDS
-from formulator.utils import _invoke_bedrock_json, _norm_name, console
+from formulator.utils import _invoke_bedrock_json, console
 
 
 def extract_query_info(
@@ -28,43 +27,30 @@ def extract_query_info(
 
     Returns:
         {
-          "ingredients":      ["나이아신아마이드", "시카"],   # DB 성분명 or ALIAS key
-          "constraints":      {"나이아신아마이드": None, "시카": None},  # 함량은 별도 추출
+          "ingredient_map":   {"나이아신아마이드": ["나이아신아마이드"], "시카": ["병풀추출물"]},
           "formulation_hints":["에센스"],
           "marketing_hints":  ["수분감", "보습감"],
         }
     """
-    ingredients: list[str] = []
-    constraints: dict[str, float | None] = {}
-    seen: set[str] = set()
+    ingredient_map: dict[str, list[str]] = {}
 
-    # 중복 없이 성분명을 ingredients 리스트와 constraints dict에 추가
-    def _add(name: str) -> None:
-        key = _norm_name(name)
-        if key in seen or len(key) < 2:
-            return
-        seen.add(key)
-        ingredients.append(name)
-        constraints[name] = None
-
-    # 1) DB 성분명 set 직접 매칭 (2자 이상)
+    # 1) DB 성분명 set 직접 매칭 (2자 이상) — DB명이 곧 키이자 값
     if known_set:
         for name in known_set:
             if len(name) >= 2 and name in query:
-                _add(name)
+                ingredient_map[name] = [name]
 
-    # 2) ALIAS_HINTS 키 매칭 (관용명·약어)
-    for alias in ALIAS_HINTS:
+    # 2) ALIAS_HINTS 키 매칭 → values(DB 성분명)로 바로 확장
+    for alias, db_names in ALIAS_HINTS.items():
         if alias.lower() in query.lower():
-            _add(alias)
+            ingredient_map[alias] = db_names
 
     formulation_hints = [kw for kw in FORMULATION_HINT_KEYWORDS if kw in query]
     kw_source         = marketing_keywords if marketing_keywords is not None else set(MARKETING_HINT_KEYWORDS)
     marketing_hints   = [kw for kw in kw_source if kw in query]
 
     return {
-        "ingredients":       ingredients,
-        "constraints":       constraints,
+        "ingredient_map":    ingredient_map,
         "formulation_hints": formulation_hints,
         "marketing_hints":   marketing_hints,
     }
@@ -112,27 +98,3 @@ def extract_amount_constraints(
         return {}
 
 
-def map_ingredients(
-    terms: list[str],
-    known_set: set[str],
-) -> dict[str, list[str] | None]:
-    """
-    ALIAS_HINTS 키 → DB 성분명 확장.
-    DB set 직접 매칭으로 들어온 성분명은 그대로 통과.
-
-    Returns: {term: [db_name, ...] or None}
-    """
-    result: dict[str, list[str] | None] = {}
-
-    for term in terms:
-        if term in known_set:
-            # DB set에서 직접 찾힌 성분명 — 그대로 사용
-            result[term] = [term]
-        elif term in ALIAS_HINTS:
-            # ALIAS_HINTS 키 — value(DB 성분명 목록) 반환
-            db_names = [v for v in ALIAS_HINTS[term] if v in known_set]
-            result[term] = db_names if db_names else None
-        else:
-            result[term] = None
-
-    return result

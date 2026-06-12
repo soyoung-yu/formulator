@@ -10,7 +10,7 @@ from formulator.data import build_stats, load_formula_data, load_product_data
 from formulator.llm import _create_bedrock_client, call_llm
 from formulator.output import print_cost_summary, print_results, save_results
 from formulator.postprocess import validate_and_fix
-from formulator.query import extract_amount_constraints, extract_query_info, map_ingredients
+from formulator.query import extract_amount_constraints, extract_query_info
 from formulator.utils import console
 
 
@@ -47,31 +47,23 @@ def run_pipeline(
     # 3. 마케팅 키워드 DB
     keyword_db = load_product_data(product_csv, formula_dict)
 
-    # 4. 질의 분석 (DB set + ALIAS_HINTS — LLM 없음, 마케팅 키워드는 keyword_db 기반)
+    # 4. 질의 분석 (DB set + ALIAS_HINTS — LLM 없음, ingredient_map 직접 반환)
     console.print("[dim]질의 분석 중...[/dim]")
     query_info = extract_query_info(
         query,
         known_set=known_set,
         marketing_keywords=set(keyword_db.keys()),
     )
-    console.print(f"[dim]  추출 성분: {query_info['ingredients']}[/dim]")
+    ingredient_map = query_info["ingredient_map"]
+    for term, mapped in ingredient_map.items():
+        console.print(f"[dim]  '{term}' → {mapped}[/dim]")
     console.print(f"[dim]  제형 힌트: {query_info['formulation_hints']}[/dim]")
     console.print(f"[dim]  마케팅 힌트: {query_info['marketing_hints']}[/dim]")
 
-    # 5. 성분명 매핑 (DB 직접 매칭은 통과 / ALIAS_HINTS 키는 DB 성분명으로 확장)
-    ingredient_map: dict[str, list[str] | None] = {}
-    if query_info["ingredients"]:
-        console.print("[dim]성분명 매핑 중...[/dim]")
-        ingredient_map = map_ingredients(query_info["ingredients"], known_set)
-        for term, mapped in ingredient_map.items():
-            status = f"→ {mapped}" if mapped else "→ 매핑 실패"
-            console.print(f"[dim]  '{term}' {status}[/dim]")
-
-    # 5b. 함량 추출 (LLM — 질의에 숫자% 있을 때만 호출)
+    # 5. 함량 추출 (LLM — 질의에 숫자% 있을 때만 호출)
     all_db_names = [
         db_name
         for mapped in ingredient_map.values()
-        if mapped
         for db_name in mapped
     ]
     user_constraints: dict[str, float] = extract_amount_constraints(

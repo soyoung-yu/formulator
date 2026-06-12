@@ -72,7 +72,17 @@ def run_pipeline(
         for db_name in ingredient_map[term]
     }
     if user_constraints:
-        console.print(f"[dim]  사용자 지정 함량: {user_constraints}[/dim]")
+        shown: set = set()
+        for db_names in ingredient_map.values():
+            candidates = [n for n in db_names if n in user_constraints]
+            if not candidates:
+                continue
+            label = " 또는 ".join(candidates)
+            console.print(f"[dim]  사용자 지정 함량: {label} = {user_constraints[candidates[0]]}%[/dim]")
+            shown.update(candidates)
+        for db_name, amt in user_constraints.items():
+            if db_name not in shown:
+                console.print(f"[dim]  사용자 지정 함량: {db_name} = {amt}%[/dim]")
 
     # 6. 컨텍스트 구성 (Python only)
     ctx = build_context(

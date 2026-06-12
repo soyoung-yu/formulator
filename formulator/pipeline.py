@@ -6,11 +6,11 @@
 
 from formulator.config import DEFAULT_AWS_REGION, DEFAULT_MODEL_ID
 from formulator.context import build_context
-from formulator.data import build_stats, load_formula_data, load_product_data
+from formulator.data import build_stats, load_external_data, load_formula_data, load_product_data
 from formulator.llm import _create_bedrock_client, call_llm
 from formulator.output import print_cost_summary, print_results, save_results
 from formulator.postprocess import validate_and_fix
-from formulator.query import extract_amount_constraints, extract_query_info
+from formulator.query import extract_amount_constraints, extract_query_info, find_target_product
 from formulator.utils import console
 
 
@@ -47,6 +47,9 @@ def run_pipeline(
     # 3. 마케팅 키워드 DB
     keyword_db = load_product_data(product_csv, formula_dict)
 
+    # 3b. 타사 제품 DB
+    external_db = load_external_data(external_csv)
+
     # 4. 질의 분석 (DB set + ALIAS_HINTS — LLM 없음, ingredient_map 직접 반환)
     console.print("[dim]질의 분석 중...[/dim]")
     query_info = extract_query_info(
@@ -59,6 +62,17 @@ def run_pipeline(
         console.print(f"[dim]  '{term}' → {mapped}[/dim]")
     console.print(f"[dim]  제형 힌트: {query_info['formulation_hints']}[/dim]")
     console.print(f"[dim]  마케팅 힌트: {query_info['marketing_hints']}[/dim]")
+
+    # 4b. 타겟 제품 탐색 (LLM — 질의에 제품명 언급 있을 때만 결과 반환)
+    console.print("[dim]타겟 제품 탐색 중...[/dim]")
+    target_product = find_target_product(
+        query, formula_dict, external_db, bedrock_client, model_id
+    )
+    if target_product:
+        src = target_product["source"]
+        console.print(f"[green]✓ 타겟 제품 [{src}] '{target_product['product_name']}' 매칭[/green]")
+    else:
+        console.print("[dim]  타겟 제품 언급 없음[/dim]")
 
     # 5. 함량 추출 (LLM — 질의에 숫자% 있을 때만 호출)
     # 질의에 표현된 성분명(ingredient_map 키)을 그대로 전달해야 LLM이 올바르게 매칭
@@ -90,6 +104,7 @@ def run_pipeline(
     )
     ctx["total_formulas"]   = stats["total_formulas"]
     ctx["user_constraints"] = user_constraints
+    ctx["target_product"]   = target_product
     console.print(
         f"[green]✓ base {len(ctx['base_ings'])}종 / active {len(ctx['active_ings'])}종 / "
         f"유사처방 그룹A {len(ctx['similar_formulas'].get('group_a',[]))}건 "

@@ -3,6 +3,7 @@
   - load_formula_data(): 처방 CSV → formula_dict
   - build_stats(): 성분별 통계
   - load_product_data(): 마케팅 키워드 DB
+  - load_external_data(): 타사 제품 CSV → external_db
 """
 
 from collections import Counter, defaultdict
@@ -117,3 +118,27 @@ def load_product_data(product_csv: str, formula_dict: dict) -> dict:
 
     console.print(f"[green]✓ 키워드 {len(keyword_db)}종 인덱싱[/green]")
     return dict(keyword_db)
+
+
+# 타사 제품 CSV를 로드해 {title: [성분명, ...]} 형태의 external_db 반환
+def load_external_data(csv_path: str) -> dict[str, list[str]]:
+    try:
+        df = pd.read_csv(csv_path, engine="python")
+    except FileNotFoundError:
+        console.print(f"[yellow]⚠ 타사 데이터 파일 없음: {csv_path}[/yellow]")
+        return {}
+
+    required = {"title", "representation_ingredients"}
+    if missing := required - set(df.columns):
+        console.print(f"[yellow]⚠ 타사 데이터 필수 컬럼 누락: {missing}[/yellow]")
+        return {}
+
+    external_db: dict[str, list[str]] = {}
+    for _, row in df.iterrows():
+        title = str(row["title"]).strip()
+        ings  = [s.strip() for s in str(row["representation_ingredients"]).split("|") if s.strip()]
+        if title and ings:
+            external_db[title] = ings
+
+    console.print(f"[green]✓ 타사 제품 데이터: {len(external_db)}건 로드[/green]")
+    return external_db

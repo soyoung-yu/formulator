@@ -1,14 +1,15 @@
 """
 질의 분석 및 성분명 매핑.
   - extract_query_info(): DB set + ALIAS_HINTS 기반 질의 분석 (LLM 없음), ingredient_map 직접 반환
-  - extract_amount_constraints(): LLM으로 질의 내 함량 정보를 성분에 연결 (옵션 C)
+  - extract_amount_constraints(): LLM으로 질의 내 함량 정보를 성분에 연결
+  - find_target_product(): LLM으로 질의 내 제품명 추출 후 자사→타사 순서로 탐색
 """
 
 import re
 from typing import Any
 
 from formulator.config import ALIAS_HINTS, FORMULATION_HINT_KEYWORDS, MARKETING_HINT_KEYWORDS
-from formulator.utils import _invoke_bedrock_json, console
+from formulator.utils import _invoke_bedrock_json, _norm_name, console
 
 
 def extract_query_info(
@@ -54,6 +55,60 @@ def extract_query_info(
         "formulation_hints": formulation_hints,
         "marketing_hints":   marketing_hints,
     }
+
+
+# 질의에서 언급된 제품명을 LLM으로 추출한 뒤 자사→타사 순서로 탐색해 타겟 처방 정보를 반환
+def find_target_product(
+    query: str,
+    formula_dict: dict,
+    external_db: dict[str, list[str]],
+    bedrock_client: Any,
+    model_id: str,
+) -> dict | None:
+    # LLM으로 질의에서 제품명 언급 추출
+    prompt = (
+        "아래 화장품 처방 요청 질의에서 참고 또는 유사 제품으로 언급된 제품명을 추출하세요.\n"
+        "제품명이 없으면 null을 반환하세요.\n\n"
+        f"[질의]\n{query}\n\n"
+        "JSON만 반환:\n"
+        "{\"product_name\": \"제품명\" 또는 null}"
+    )
+    try:
+        result, _ = _invoke_bedrock_json(bedrock_client, model_id, prompt, max_tokens=128)
+        product_name = result.get("product_name") if isinstance(result, dict) else None
+    except Exception:
+        return None
+
+    if not product_name:
+        return None
+
+    norm_query = _norm_name(product_name)
+
+    # 1) 자사 처방에서 탐색 (formula_dict의 name 필드)
+    for code, fd in formula_dict.items():
+        if _norm_name(fd.get("name", "")) == norm_query or product_name in fd.get("name", ""):
+            ings = fd["ingredients"]
+            return {
+                "source":       "자사",
+                "product_name": fd["name"],
+                "code":         code,
+                "ingredients":  [
+                    {"name": n, "content": c}
+                    for n, c in sorted(ings.items(), key=lambda x: -x[1])
+                ],
+            }
+
+    # 2) 타사 데이터에서 탐색 (external_db의 title)
+    for title, ing_list in external_db.items():
+        if _norm_name(title) == norm_query or product_name in title:
+            return {
+                "source":       "타사",
+                "product_name": title,
+                "code":         None,
+                "ingredients":  [{"name": n, "content": None} for n in ing_list],
+            }
+
+    return None
 
 
 def extract_amount_constraints(

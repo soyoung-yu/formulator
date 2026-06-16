@@ -92,13 +92,14 @@ def build_user_prompt(query: str, ctx: dict, total_formulas: int) -> str:
         if f.get("matched_ingredients"):
             reason_parts.append(f"질의 성분: {', '.join(f['matched_ingredients'])}")
         reason = " / ".join(reason_parts)
+        ing_str = ", ".join(f"{i['name']} {i['content']}%" for i in f["ingredients"])
         return [
             f"처방{idx}: {f['name']}  [{reason}]",
-            f"  성분 구성: {', '.join(f['ingredients'])}",
+            f"  성분 구성(함량): {ing_str}",
         ]
 
     if group_a or group_b:
-        lines.append("\n[유사 처방 참고 — 성분 구성 참고용, 함량 미포함]")
+        lines.append("\n[유사 처방 참고 — 실제 출시 처방. 성분·함량 구성을 적극 반영해 설계할 것]")
         if group_a:
             lines.append(f"▶ 마케팅 키워드 매칭 처방 (top-{len(group_a)}건)")
             for idx, f in enumerate(group_a, 1):

@@ -39,7 +39,7 @@ def _pick_similar(
         group_a.append({
             "bulk_code":           c,
             "name":                formula_dict[c]["name"],
-            "ingredients":         list(formula_dict[c]["ingredients"].keys()),
+            "ingredients":         [{"name": n, "content": v} for n, v in formula_dict[c]["ingredients"].items()],
             "matched_keywords":    mkws,
             "matched_ingredients": mings,
         })
@@ -59,7 +59,7 @@ def _pick_similar(
         {
             "bulk_code":           c,
             "name":                formula_dict[c]["name"],
-            "ingredients":         list(formula_dict[c]["ingredients"].keys()),
+            "ingredients":         [{"name": n, "content": v} for n, v in formula_dict[c]["ingredients"].items()],
             "matched_keywords":    [],
             "matched_ingredients": mings,
         }
@@ -134,7 +134,8 @@ def build_context(
 
     # 3) 유사 처방 출현 성분
     for f in similar.get("group_a", []) + similar.get("group_b", []):
-        for name in f.get("ingredients", []):
+        for ing in f.get("ingredients", []):
+            name = ing["name"]
             if name in ist:
                 allowed.add(name)
 
@@ -174,7 +175,8 @@ def build_context(
     similar_active_ings: list[dict] = []
     seen_similar: set[str] = set()
     for f in similar.get("group_a", []) + similar.get("group_b", []):
-        for name in f.get("ingredients", []):
+        for ing in f.get("ingredients", []):
+            name = ing["name"]
             if name in ist and _is_active(name, ist[name]) and name not in assigned and name not in seen_similar:
                 similar_active_ings.append({"name": name, **ist[name]})
                 seen_similar.add(name)

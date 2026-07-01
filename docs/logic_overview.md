@@ -1,4 +1,4 @@
-# 로직 개요 — v1.1
+# 로직 개요 — v1.2
 
 이 문서는 `formulator/` 패키지(v1.1) 기준이다.
 
@@ -84,6 +84,7 @@ LLM 없이 Python만으로 컨텍스트를 구성한다.
 **유사 처방 탐색 (`_pick_similar`)**:
 - **그룹 A**: 마케팅 키워드 매칭 처방 (동시 매칭 키워드 수 기준 top-3)
 - **그룹 B**: 질의 성분이 포함된 처방 중 그룹 A 제외 (매칭 성분 수 기준 top-3)
+- ingredients 필드: `[{"name": str, "content": float}]` — 성분명과 함량 모두 포함해 프롬프트에 노출
 
 **성분 통계 5섹션** (중복 없이 우선순위 순서로 배정):
 1. 구조 성분 (`base_ings`): 빈도 내림차순 top-15
@@ -292,6 +293,7 @@ formulation_automation/
 ├── external.csv            타사 제품 전성분 DB
 ├── formulator/             메인 패키지
 │   ├── config.py           상수 (ALIAS_HINTS, TACIT_KNOWLEDGE 등)
+│   ├── utils.py            공통 유틸리티 (console, Bedrock 헬퍼, 포매팅)
 │   ├── data.py
 │   ├── query.py
 │   ├── context.py

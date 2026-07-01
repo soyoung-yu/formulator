@@ -1,7 +1,16 @@
 """
 CLI 진입점.
-  python -m formulator --data data.csv --product product.csv --query "..."
-  python formulator/main.py --data ...
+
+기본 실행:
+  python -m formulator --data data.csv --product product.csv --external external.csv --query "..."
+
+로컬 개발 (AWS 프로파일 지정):
+  python -m formulator --data data.csv --product product.csv --external external.csv \\
+      --query "..." --aws_profile <프로파일명>
+
+SageMaker 실행:
+  python -m formulator --data data.csv --product product.csv --external external.csv --query "..."
+  # SageMaker는 IAM 역할로 자동 인증되므로 --aws_profile 불필요
 """
 
 import argparse
@@ -14,12 +23,12 @@ from formulator.pipeline import run_pipeline
 # CLI 인수를 정의하고 파싱해 Namespace 객체로 반환
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="화장품 처방 자동 생성 PoC v1.0 (AWS Bedrock)"
+        description="화장품 처방 자동 생성 PoC v1.2 (AWS Bedrock)"
     )
     parser.add_argument("--data",        required=True,  help="처방 CSV (data.csv)")
     parser.add_argument("--product",     required=True,  help="마케팅 키워드 CSV (product.csv)")
     parser.add_argument("--external",    default="external.csv",
-                        help="타사 제품 CSV (v1.0에서 미사용, 호환성 유지)")
+                        help="타사 제품 CSV (external.csv)")
     parser.add_argument("--query",       required=True,  help="제품 요구사항 텍스트")
     parser.add_argument("--aws_profile", default=None,   help="AWS 프로파일명 (로컬 개발용)")
     parser.add_argument(

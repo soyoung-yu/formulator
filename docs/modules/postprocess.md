@@ -7,7 +7,7 @@
 ## 역할
 
 LLM이 생성한 처방 JSON을 두 단계로 보정한다.
-1. 화이트리스트 검증 — DB에 없는 성분 제거
+1. 화이트리스트 검증 — DB에 없는 성분에 대해 LLM 대체 탐색 후 불가 시 제거
 2. 합계 보정 — 정제수 함량으로 100% 맞춤
 
 ---
@@ -20,6 +20,8 @@ def validate_and_fix(
     stats: dict,
     known_set: set[str] | None = None,
     user_constraints: dict[str, float] | None = None,
+    bedrock_client: Any = None,
+    model_id: str | None = None,
 ) -> dict
 ```
 
@@ -34,13 +36,22 @@ def validate_and_fix(
 ```
 성분명 in known_set?
   → Yes: 그대로 통과
-  → No:  정규화 exact match 시도
-           (_norm_name: 공백·하이픈·특수문자 제거 + 소문자화)
+  → No:  _norm_name() 정규화 exact match 시도
+           (공백·하이픈·특수문자 제거 + 소문자화)
            → 매칭 성공: 성분명을 known_set의 정식 표기로 교체
-           → 매칭 실패: 해당 성분 조용히 제거
+           → 매칭 실패:
+               bedrock_client가 전달됐는가?
+                 → Yes: LLM에 대체 성분 3개 후보 요청
+                          (_suggest_substitutes)
+                          → DB 매칭 후보 있음: 해당 성분으로 교체 + 경고 출력
+                          → 모두 미매칭: 해당 성분 제거 + 경고 출력
+                 → No:  조용히 제거 (운영 환경에서는 항상 bedrock_client 전달 권장)
 ```
 
-**중요**: 제거 시 경고 메시지를 출력하지 않는다. LLM이 할루시네이션으로 생성한 성분명은 조용히 제거하는 것이 의도된 동작이다.
+**`_suggest_substitutes` 로직**:
+- `role`을 포함해 효능·역할·점도·pH·규제 기준으로 유사 성분 3개 제안 요청
+- `known_set`과 exact match 우선, 정규화 match 폴백
+- 실패 시 `None` 반환
 
 ### 2단계 — 합계 100% 보정
 
@@ -77,7 +88,7 @@ def validate_and_fix(
     "ingredients": [
       {"name": "정제수", "content": 77.5, "role": "기본 용제"},
       {"name": "나이아신아마이드", "content": 10.0, "role": "미백"},
-      {"name": "존재하지않는성분", "content": 2.0, "role": "?"},  # 제거됨
+      {"name": "존재하지않는성분", "content": 2.0, "role": "?"},  # LLM 대체 탐색 → 실패 시 제거
       {"name": "글리세린", "content": 5.0, "role": "보습"},
     ]
   }]

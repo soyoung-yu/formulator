@@ -18,14 +18,14 @@ from formulator.utils import console
 def run_pipeline(
     data_csv:    str,
     product_csv: str,
-    external_csv: str,       # 호환성 유지용, v1.0에서는 사용 안 함
+    external_csv: str,
     query:       str,
     aws_profile: str | None = None,
     aws_region:  str        = DEFAULT_AWS_REGION,
     model_id:    str        = DEFAULT_MODEL_ID,
     output_dir:  str        = "output",
 ) -> None:
-    console.rule("AI 기반 화장품 처방 자동 생성 PoC v1.0 (AWS Bedrock)")
+    console.rule("AI 기반 화장품 처방 자동 생성 PoC v1.2 (AWS Bedrock)")
 
     # ── Bedrock 클라이언트 ────────────────────────────────────────────────
     try:

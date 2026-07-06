@@ -197,13 +197,14 @@ def build_user_prompt(query: str, ctx: dict, total_formulas: int) -> str:
     # ── 3안 설계 지침 ─────────────────────────────────────────────────────
     lines.append(
         "\n[3안 설계 지침]\n"
-        "- Formula A: 핵심 활성 성분 고함량 + 성분 수 최소화 (심플 & 집중 효능)\n"
-        "- Formula B: 핵심 효능 + 보습·진정 복합 기능 밸런스 (올라운드 실용 처방)\n"
-        "- Formula C: 트렌드 성분 또는 복합 활성 성분 추가, 마케팅 소구점 강화 (프리미엄·차별화)\n"
+        "- 모든 Formula는 사용자 요구사항을 최대한 반영해야 합니다.\n"
+        "- Formula A: 제형 안정도 우선. 점도, pH, 성분 상용성, 분리·석출 리스크를 우선 검토해 안정적인 제형으로 설계합니다.\n"
+        "- Formula B: 사용자 요구사항 우선. 질의의 효능·사용감·마케팅 포인트를 가장 강하게 반영합니다.\n"
+        "- Formula C: 새로운 시도. 트렌드 성분, 차별화된 조합, 새로운 컨셉을 검토합니다.\n"
         "- 각 안의 함량 합계가 정확히 100.00%가 되도록 정제수 함량으로 조정하세요.\n"
         "- [허용 성분 목록]에 없는 성분은 절대 사용하지 마세요."
     )
     if marketing_hints:
-        lines.append(f"- 마케팅 포인트({', '.join(marketing_hints)})를 target_aspects와 설계 근거에 반영하세요.")
+        lines.append(f"- 사용자 요구사항({', '.join(marketing_hints)})를 모든 Formula의 target_aspects와 설계 근거에 반영하세요.")
 
     return "\n".join(lines)

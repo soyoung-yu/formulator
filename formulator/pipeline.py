@@ -4,6 +4,8 @@
 비즈니스 흐름의 단일 진실 공급원. 각 단계의 구현은 담당 모듈에 있다.
 """
 
+import time
+
 from formulator.config import DEFAULT_AWS_REGION, DEFAULT_MODEL_ID
 from formulator.context import build_context
 from formulator.data import build_stats, load_external_data, load_formula_data, load_product_data
@@ -25,6 +27,7 @@ def run_pipeline(
     model_id:    str        = DEFAULT_MODEL_ID,
     output_dir:  str        = "output",
 ) -> None:
+    pipeline_started = time.perf_counter()
     console.rule("AI 기반 화장품 처방 자동 생성 PoC v1.2 (AWS Bedrock)")
 
     # ── Bedrock 클라이언트 ────────────────────────────────────────────────
@@ -150,5 +153,7 @@ def run_pipeline(
         formula_data, stats, keyword_db, query, output_dir,
         cost=cost, prompt_payload=prompt_payload,
     )
+    cost.setdefault("model_id", model_id)
+    cost["total_elapsed_seconds"] = round(time.perf_counter() - pipeline_started, 3)
     print_cost_summary(cost)
     console.print(f"\n[bold green]완료! 결과: {output_dir}/[/bold green]")

@@ -37,6 +37,7 @@ def calc_cost(model_id: str, input_tokens: int, output_tokens: int) -> dict:
     total_usd   = input_cost + output_cost
 
     return {
+        "model_id":          model_id,
         "input_tokens":    input_tokens,
         "output_tokens":   output_tokens,
         "input_cost_usd":  round(input_cost,  6),
@@ -49,8 +50,13 @@ def calc_cost(model_id: str, input_tokens: int, output_tokens: int) -> dict:
 
 # 비용 dict를 받아 토큰 수·USD·KRW 비용 요약을 콘솔에 출력
 def print_cost_summary(cost: dict) -> None:
+    total_elapsed = cost.get("total_elapsed_seconds")
+    llm_response  = cost.get("llm_response_seconds")
     lines = [
         "💰 비용 요약",
+        f"  사용 모델: {cost.get('model_id', '알 수 없음')}",
+        f"  전체 실행 시간: {total_elapsed:.2f}초" if total_elapsed is not None else "  전체 실행 시간: 알 수 없음",
+        f"  LLM 응답 시간: {llm_response:.2f}초" if llm_response is not None else "  LLM 응답 시간: 알 수 없음",
         f"  토큰: 입력 {cost['input_tokens']:,} / 출력 {cost['output_tokens']:,} / "
         f"합계 {cost['input_tokens'] + cost['output_tokens']:,}",
         f"  입력 비용: ${cost['input_cost_usd']:.6f} USD",

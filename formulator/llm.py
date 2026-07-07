@@ -33,6 +33,7 @@ def calc_cost(model_id: str, input_tokens: int, output_tokens: int) -> dict:
     total_usd   = input_cost + output_cost
 
     return {
+        "model_id":          model_id,
         "input_tokens":    input_tokens,
         "output_tokens":   output_tokens,
         "input_cost_usd":  round(input_cost,  6),
@@ -78,18 +79,22 @@ def call_llm(
 
     console.print(f"[dim]Claude API 호출 중... (모델: {model_id})[/dim]")
 
+    llm_response_seconds = 0.0
+
     for attempt in range(1, max_retries + 2):
+        request_started = time.perf_counter()
         try:
             response = bedrock_client.invoke_model(
                 modelId=model_id,
                 body=json.dumps(
                     _build_bedrock_messages_payload(
-                        user_prompt, max_tokens=4096, system=SYSTEM_PROMPT
+                        user_prompt, max_tokens=8192, system=SYSTEM_PROMPT
                     ),
                     ensure_ascii=False,
                 ),
             )
         except Exception as e:
+            llm_response_seconds += time.perf_counter() - request_started
             err = str(e)
             if "ThrottlingException" in err or "Too Many Requests" in err:
                 wait = 10 * attempt
@@ -100,11 +105,13 @@ def call_llm(
             return None, {}, prompt_payload
 
         body    = json.loads(response["body"].read())
+        llm_response_seconds += time.perf_counter() - request_started
         text    = body["content"][0]["text"]
         usage   = body.get("usage", {})
         in_tok  = usage.get("input_tokens",  0)
         out_tok = usage.get("output_tokens", 0)
         cost    = calc_cost(model_id, in_tok, out_tok)
+        cost["llm_response_seconds"] = round(llm_response_seconds, 3)
         console.print(f"[dim]✓ 토큰: 입력 {in_tok:,} / 출력 {out_tok:,}[/dim]")
 
         raw = _strip_json_fences(text)

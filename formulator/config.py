@@ -99,6 +99,8 @@ BEDROCK_PRICING: dict[str, dict[str, float]] = {
     "anthropic.claude-3-sonnet-20240229-v1:0":      {"input": 3.00, "output": 15.00},
     "anthropic.claude-3-haiku-20240307-v1:0":       {"input": 0.25, "output":  1.25},
     "anthropic.claude-3-opus-20240229-v1:0":        {"input": 15.00,"output": 75.00},
+    "anthropic.claude-sonnet-4-6":                  {"input": 3.00, "output": 15.00},
+    "global.anthropic.claude-sonnet-4-6":           {"input": 3.00, "output": 15.00},
     "anthropic.claude-sonnet-4-5-20250929-v1:0":    {"input": 3.00, "output": 15.00},
     "anthropic.claude-haiku-4-5-20251001-v1:0":     {"input": 1.00, "output":  5.00},
     "anthropic.claude-opus-4-5-20251101-v1:0":      {"input": 5.00, "output": 25.00},

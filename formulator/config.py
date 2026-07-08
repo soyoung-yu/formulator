@@ -4,7 +4,7 @@
 
 ANTHROPIC_VERSION  = "bedrock-2023-05-31"
 DEFAULT_AWS_REGION = "ap-northeast-2"
-DEFAULT_MODEL_ID   = "anthropic.claude-3-5-sonnet-20240620-v1:0"
+DEFAULT_MODEL_ID   = "global.anthropic.claude-sonnet-4-6"
 
 # ── 구조적 역할 분류 ─────────────────────────────────────────────────────
 STRUCTURAL_FUNCTIONS: dict[str, list[str]] = {

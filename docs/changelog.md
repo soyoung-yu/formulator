@@ -21,6 +21,10 @@
 
 - **Claude Sonnet 4.6 요금 등록** (`config.py`): `anthropic.claude-sonnet-4-6`, `global.anthropic.claude-sonnet-4-6`를 입력 $3 / 출력 $15 per 1M tokens 기준으로 추가.
 
+### 기본 모델 변경
+
+- **DEFAULT_MODEL_ID 변경** (`config.py`): 기본 Bedrock 모델을 Claude 3.5 Sonnet에서 `global.anthropic.claude-sonnet-4-6`로 변경.
+
 ### 유사 처방 성분 함량 공개
 
 - **유사 처방 ingredients 구조 변경** (`context.py`): `_pick_similar()`에서 group_a/group_b의 `ingredients`를 성분명 문자열 리스트 → `[{"name": str, "content": float}]` 딕셔너리 리스트로 변경. 함량 정보를 프롬프트에 노출.

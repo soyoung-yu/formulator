@@ -88,7 +88,7 @@ def call_llm(
                 modelId=model_id,
                 body=json.dumps(
                     _build_bedrock_messages_payload(
-                        user_prompt, max_tokens=8192, system=SYSTEM_PROMPT
+                        user_prompt, max_tokens=5500, system=SYSTEM_PROMPT
                     ),
                     ensure_ascii=False,
                 ),
